@@ -6,7 +6,8 @@ using UnityEngine.InputSystem;
 /// Drives the turn-based movement loop:
 /// click a unit to select it, click a tile to project a path, then press
 /// Space to spend the unit's moves. When a unit is out of moves, Space
-/// advances to the next turn so it can continue along the same path.
+/// advances to the next turn; units already following a path then move
+/// automatically, so one tap per turn carries them along their route.
 /// </summary>
 public class GameController : MonoBehaviour
 {
@@ -138,8 +139,14 @@ public class GameController : MonoBehaviour
     void AdvanceTurn()
     {
         Turn++;
+        // A new turn refills moves; a unit already following a path spends
+        // them straight away, so the player taps once per turn, not twice.
         foreach (var unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
+        {
             unit.RefillMoves();
+            if (unit.Path.Count > 0)
+                unit.MoveAlongPath();
+        }
         RefreshHighlights();
     }
 
