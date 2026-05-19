@@ -1,0 +1,57 @@
+# ---- Unity generated folders ----
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Asset meta data should only be ignored when the corresponding asset is also ignored
+!/[Aa]ssets/**/*.meta
+
+# ---- Unity generated IDE / solution files ----
+/[Aa]ssembly-[Cc]Sharp*.csproj
+/[Aa]ssembly-[Cc]Sharp*.unityproj
+/*.sln
+/*.csproj
+/*.unityproj
+/*.suo
+/*.user
+/*.userprefs
+/*.pidb
+/*.booproj
+/*.svd
+/*.pdb
+/*.mdb
+/*.opendb
+/*.VC.db
+/.vs/
+/.vsconfig
+
+# ---- Unity crash / build reports ----
+/sysinfo.txt
+/*.apk
+/*.aab
+/*.unitypackage
+/*.app
+/crashlytics-build.properties
+/[Ee]xported[Oo]bj/
+.consulo/
+
+# ---- OS / editor cruft ----
+.DS_Store
+Thumbs.db
+
+# ---- Claude Code per-developer local settings ----
+/.claude/settings.local.json
+
+# ---- Unity Bridge tooling artifacts (transient) ----
+/Assets/LLM/Bridge/request.json
+/Assets/LLM/Bridge/request.json.meta
+/Assets/LLM/Bridge/response.md
+/Assets/LLM/Bridge/response.md.meta
+/Assets/LLM/Bridge/Screenshots/
+/Assets/LLM/Bridge/Screenshots.meta
