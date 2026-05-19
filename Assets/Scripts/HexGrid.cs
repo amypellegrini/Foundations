@@ -21,7 +21,10 @@ public class HexGrid : MonoBehaviour
     public float gap = 0.05f;
 
     [Header("Appearance")]
-    public Color tileColor = new Color(0.45f, 0.55f, 0.38f);
+    [Tooltip("Material for the tiles. This must be a project material asset, not " +
+             "one created at runtime — referencing an asset is what keeps its " +
+             "shader (and variants) included in player builds.")]
+    public Material tileMaterial;
 
     void Start()
     {
@@ -58,12 +61,10 @@ public class HexGrid : MonoBehaviour
 
         GetComponent<MeshFilter>().sharedMesh = mesh;
 
-        // Unlit keeps tile color predictable — the hexes are flat, so lighting
-        // would only flatten the color anyway.
-        var shader = Shader.Find("Universal Render Pipeline/Unlit");
-        var material = new Material(shader) { name = "HexTile" };
-        material.SetColor("_BaseColor", tileColor);
-        GetComponent<MeshRenderer>().sharedMaterial = material;
+        if (tileMaterial != null)
+            GetComponent<MeshRenderer>().sharedMaterial = tileMaterial;
+        else
+            Debug.LogError("HexGrid: tileMaterial is not assigned.", this);
     }
 
     /// <summary>
