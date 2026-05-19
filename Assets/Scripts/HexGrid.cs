@@ -67,6 +67,37 @@ public class HexGrid : MonoBehaviour
             Debug.LogError("HexGrid: tileMaterial is not assigned.", this);
     }
 
+    // --- Public query API: lets units and overlays sit on the grid -------
+
+    /// <summary>Horizontal distance between adjacent hex columns.</summary>
+    public float HorizontalSpacing => hexSize * 1.5f;
+
+    /// <summary>Vertical distance between adjacent hex rows.</summary>
+    public float VerticalSpacing => hexSize * Mathf.Sqrt(3f);
+
+    /// <summary>World-space center of the hex at the given offset coordinates.</summary>
+    public Vector3 HexCenter(int col, int row)
+    {
+        float x = col * HorizontalSpacing;
+        float z = row * VerticalSpacing + (col % 2 == 1 ? VerticalSpacing * 0.5f : 0f);
+        return transform.TransformPoint(new Vector3(x, 0f, z));
+    }
+
+    /// <summary>
+    /// The six flat-top corner positions of a hexagon, ordered counter-clockwise.
+    /// Matches the winding used by <see cref="AddHex"/>.
+    /// </summary>
+    public static Vector3[] HexCorners(Vector3 center, float radius)
+    {
+        var corners = new Vector3[6];
+        for (int i = 0; i < 6; i++)
+        {
+            float angle = Mathf.Deg2Rad * (60f * i);
+            corners[i] = center + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+        }
+        return corners;
+    }
+
     /// <summary>
     /// Adds one flat-top hexagon (a triangle fan around its center) lying
     /// on the XZ plane, wound so the face points up (+Y).
