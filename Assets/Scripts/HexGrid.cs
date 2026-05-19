@@ -98,6 +98,108 @@ public class HexGrid : MonoBehaviour
         return corners;
     }
 
+    /// <summary>True if the given offset coordinates lie on the grid.</summary>
+    public bool InBounds(int col, int row)
+        => col >= 0 && col < columns && row >= 0 && row < rows;
+
+    static readonly Vector2Int[] EvenColumnNeighbors =
+    {
+        new Vector2Int(0, 1), new Vector2Int(0, -1),
+        new Vector2Int(1, 0), new Vector2Int(1, -1),
+        new Vector2Int(-1, 0), new Vector2Int(-1, -1),
+    };
+
+    static readonly Vector2Int[] OddColumnNeighbors =
+    {
+        new Vector2Int(0, 1), new Vector2Int(0, -1),
+        new Vector2Int(1, 1), new Vector2Int(1, 0),
+        new Vector2Int(-1, 1), new Vector2Int(-1, 0),
+    };
+
+    /// <summary>
+    /// The in-bounds hex neighbors of a tile. Uses an offset table for this
+    /// grid's flat-top layout, where odd columns are nudged half a row in +Z.
+    /// </summary>
+    public IEnumerable<Vector2Int> Neighbors(int col, int row)
+    {
+        var table = (col % 2 == 0) ? EvenColumnNeighbors : OddColumnNeighbors;
+        foreach (var d in table)
+        {
+            int c = col + d.x;
+            int r = row + d.y;
+            if (InBounds(c, r))
+                yield return new Vector2Int(c, r);
+        }
+    }
+
+    /// <summary>
+    /// Finds the hex containing a world-space point by nearest center.
+    /// Returns false if the point lies outside the grid.
+    /// </summary>
+    public bool TryWorldToHex(Vector3 world, out int col, out int row)
+    {
+        col = 0;
+        row = 0;
+        float best = float.MaxValue;
+        for (int c = 0; c < columns; c++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                Vector3 center = HexCenter(c, r);
+                float dx = world.x - center.x;
+                float dz = world.z - center.z;
+                float d = dx * dx + dz * dz;
+                if (d < best)
+                {
+                    best = d;
+                    col = c;
+                    row = r;
+                }
+            }
+        }
+        // Any point inside a hex is at most hexSize from its center.
+        return best <= hexSize * hexSize;
+    }
+
+    /// <summary>
+    /// Breadth-first shortest path between two tiles over uniform-cost hexes.
+    /// The result is the sequence of tiles to step onto, excluding the start
+    /// and ending at the goal; empty if the goal equals the start or is
+    /// unreachable.
+    /// </summary>
+    public List<Vector2Int> FindPath(Vector2Int start, Vector2Int goal)
+    {
+        var path = new List<Vector2Int>();
+        if (start == goal || !InBounds(start.x, start.y) || !InBounds(goal.x, goal.y))
+            return path;
+
+        var cameFrom = new Dictionary<Vector2Int, Vector2Int> { [start] = start };
+        var frontier = new Queue<Vector2Int>();
+        frontier.Enqueue(start);
+
+        while (frontier.Count > 0)
+        {
+            Vector2Int current = frontier.Dequeue();
+            if (current == goal)
+                break;
+            foreach (var next in Neighbors(current.x, current.y))
+            {
+                if (cameFrom.ContainsKey(next))
+                    continue;
+                cameFrom[next] = current;
+                frontier.Enqueue(next);
+            }
+        }
+
+        if (!cameFrom.ContainsKey(goal))
+            return path;
+
+        for (Vector2Int node = goal; node != start; node = cameFrom[node])
+            path.Add(node);
+        path.Reverse();
+        return path;
+    }
+
     /// <summary>
     /// Adds one flat-top hexagon (a triangle fan around its center) lying
     /// on the XZ plane, wound so the face points up (+Y).
