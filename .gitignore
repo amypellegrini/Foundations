@@ -48,6 +48,9 @@ Thumbs.db
 # ---- Claude Code per-developer local settings ----
 /.claude/settings.local.json
 
+# ---- tw-ai tooling ----
+/.tw-ai/
+
 # ---- Unity Bridge tooling artifacts (transient) ----
 /Assets/LLM/Bridge/request.json
 /Assets/LLM/Bridge/request.json.meta
