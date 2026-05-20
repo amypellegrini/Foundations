@@ -16,10 +16,6 @@ public class HexGrid : MonoBehaviour
     [Tooltip("Distance from a hex center to one of its corners.")]
     public float hexSize = 1f;
 
-    [Tooltip("Fraction each hex is shrunk to leave a visible gap between tiles.")]
-    [Range(0f, 0.2f)]
-    public float gap = 0.05f;
-
     [Header("Appearance")]
     [Tooltip("Material for the tiles. This must be a project material asset, not " +
              "one created at runtime — referencing an asset is what keeps its " +
@@ -35,7 +31,6 @@ public class HexGrid : MonoBehaviour
     {
         var vertices = new List<Vector3>();
         var triangles = new List<int>();
-        float drawSize = hexSize * (1f - gap);
 
         // Flat-top hex spacing: columns step horizontally, every odd column
         // is nudged half a row down so the hexes interlock.
@@ -48,7 +43,7 @@ public class HexGrid : MonoBehaviour
             {
                 float x = col * horizSpacing;
                 float z = row * vertSpacing + (col % 2 == 1 ? vertSpacing * 0.5f : 0f);
-                AddHex(vertices, triangles, new Vector3(x, 0f, z), drawSize);
+                AddHex(vertices, triangles, new Vector3(x, 0f, z), hexSize);
             }
         }
 
