@@ -3,19 +3,21 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// Pans the camera across the hex map in response to arrow keys (or WASD),
-/// edge-of-screen mouse pushes, and right-mouse-button drag, keeping the
+/// edge-of-screen mouse pushes, and left-mouse-button drag, keeping the
 /// camera flying parallel to the XZ plane. Movement directions are taken
 /// from the camera's own forward/right with the Y axis flattened, so
 /// panning still feels natural when the camera is tilted.
 ///
-/// Right-click drag uses a "grab the world" model: the world point under
-/// the cursor when the drag started stays under the cursor for the rest of
+/// Left-click drag uses a "grab the world" model: the world point under
+/// the cursor when the drag began stays under the cursor for the rest of
 /// the drag, so dragging right visually moves the world right (the camera
-/// moves left).
+/// moves left). The drag only activates once the cursor has moved a few
+/// pixels from the press position, so plain clicks (handled by
+/// <see cref="GameController"/>) aren't swallowed by a phantom drag.
 ///
 /// Edge-scroll kicks in when the cursor sits within
 /// <see cref="edgePanMargin"/> pixels of any window edge; it is suppressed
-/// while a right-click drag is active so the two pan modes don't fight.
+/// while a left-click drag is active so the two pan modes don't fight.
 ///
 /// If a <see cref="HexGrid"/> is assigned, the pan position is clamped so
 /// the camera stays roughly over the map.
@@ -32,7 +34,7 @@ public class CameraPan : MonoBehaviour
              "region so the camera can drift slightly past the map edge.")]
     public float clampMargin = 4f;
 
-    [Tooltip("Camera used for right-click drag raycasts. Defaults to " +
+    [Tooltip("Camera used for left-click drag raycasts. Defaults to " +
              "Camera.main if left unset.")]
     public Camera cam;
 
@@ -40,18 +42,28 @@ public class CameraPan : MonoBehaviour
              "pan activates. Set to 0 to disable edge-scrolling.")]
     public float edgePanMargin = 20f;
 
-    // World-space point that was under the cursor when the right-mouse drag
-    // started. While the drag is active, we move the camera so this same
+    // Pixel distance the cursor must travel while the left button is held
+    // before we treat the gesture as a camera drag rather than a click. Kept
+    // in sync with the matching threshold in GameController so the two
+    // never disagree near the boundary.
+    public const float DragActivationPixels = 5f;
+
+    // World-space point that was under the cursor when the left-mouse drag
+    // activated. While the drag is active, we move the camera so this same
     // point stays under the cursor every frame.
     Vector3 dragAnchorWorld;
+    // Screen position recorded on press; used to defer drag activation
+    // until the cursor has moved past DragActivationPixels.
+    Vector2 dragPressScreen;
+    bool dragButtonHeld;
     bool dragging;
 
     void Update()
     {
         Vector3 position = transform.position;
 
-        // Right-click drag pan ("grab the world"): the world point grabbed
-        // at mouse-down stays under the cursor for the rest of the drag.
+        // Left-click drag pan ("grab the world"): the world point grabbed
+        // at drag activation stays under the cursor for the rest of the drag.
         position = ApplyDragPan(position);
 
         // Edge-of-screen pan and keyboard pan compose on top of any drag
@@ -123,8 +135,9 @@ public class CameraPan : MonoBehaviour
 
     Vector3 ApplyDragPan(Vector3 position)
     {
-        if (!ReadRightMouse(out Vector2 screen, out bool pressedThisFrame))
+        if (!ReadLeftMouse(out Vector2 screen, out bool pressedThisFrame))
         {
+            dragButtonHeld = false;
             dragging = false;
             return position;
         }
@@ -133,14 +146,32 @@ public class CameraPan : MonoBehaviour
         if (c == null)
             return position;
 
-        if (pressedThisFrame || !dragging)
+        if (pressedThisFrame || !dragButtonHeld)
         {
-            // Start of drag: remember the world point under the cursor.
-            if (TryRaycastGround(c, screen, out Vector3 anchor))
-            {
-                dragAnchorWorld = anchor;
-                dragging = true;
-            }
+            // Button just went down — record where, but don't anchor or
+            // move the camera yet. We wait for the cursor to travel beyond
+            // DragActivationPixels so a plain click can't accidentally
+            // start a drag.
+            dragPressScreen = screen;
+            dragButtonHeld = true;
+            dragging = false;
+            return position;
+        }
+
+        if (!dragging)
+        {
+            float sqr = (screen - dragPressScreen).sqrMagnitude;
+            if (sqr < DragActivationPixels * DragActivationPixels)
+                return position;
+
+            // Crossed the activation threshold: anchor at the *current*
+            // cursor position (not the press position) so the first moved
+            // frame doesn't snap the camera by the threshold distance.
+            if (!TryRaycastGround(c, screen, out Vector3 anchor))
+                return position;
+
+            dragAnchorWorld = anchor;
+            dragging = true;
             return position;
         }
 
@@ -160,27 +191,27 @@ public class CameraPan : MonoBehaviour
         return next;
     }
 
-    // Read the right mouse button from whichever input pipeline reports it.
+    // Read the left mouse button from whichever input pipeline reports it.
     // The new Input System (Mouse.current) reads from a lower-level source
     // that doesn't see clicks synthesized by macOS accessibility tools like
     // BestMouseKeys; the legacy Input API does, so we fall back to it when
     // both backends are enabled (Project Settings -> Active Input Handling
     // = "Both").
-    static bool ReadRightMouse(out Vector2 screen, out bool pressedThisFrame)
+    static bool ReadLeftMouse(out Vector2 screen, out bool pressedThisFrame)
     {
         var mouse = Mouse.current;
-        if (mouse != null && mouse.rightButton.isPressed)
+        if (mouse != null && mouse.leftButton.isPressed)
         {
             screen = mouse.position.ReadValue();
-            pressedThisFrame = mouse.rightButton.wasPressedThisFrame;
+            pressedThisFrame = mouse.leftButton.wasPressedThisFrame;
             return true;
         }
 
 #if ENABLE_LEGACY_INPUT_MANAGER
-        if (UnityEngine.Input.GetMouseButton(1))
+        if (UnityEngine.Input.GetMouseButton(0))
         {
             screen = UnityEngine.Input.mousePosition;
-            pressedThisFrame = UnityEngine.Input.GetMouseButtonDown(1);
+            pressedThisFrame = UnityEngine.Input.GetMouseButtonDown(0);
             return true;
         }
 #endif
@@ -191,7 +222,7 @@ public class CameraPan : MonoBehaviour
     }
 
     // Read the current cursor position from whichever input pipeline is
-    // available, matching the dual-backend handling used for the right
+    // available, matching the dual-backend handling used for the left
     // mouse button above.
     static bool ReadMousePosition(out Vector2 screen)
     {

@@ -33,6 +33,13 @@ public class GameController : MonoBehaviour
     bool wasMoving;
     GUIStyle hudStyle;
 
+    // Position of the cursor when the left mouse button went down. On
+    // release, the click only commits if the cursor hasn't moved past the
+    // shared drag threshold — that way a left-click drag handled by
+    // CameraPan doesn't also trigger a unit selection or move order.
+    Vector2 pressScreen;
+    bool pressing;
+
     void Awake()
     {
         if (cam == null)
@@ -65,10 +72,34 @@ public class GameController : MonoBehaviour
     void HandleClick()
     {
         var mouse = Mouse.current;
-        if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
+        if (mouse == null)
             return;
 
-        Ray ray = cam.ScreenPointToRay(mouse.position.ReadValue());
+        // Record the press, but don't commit anything until release. Firing
+        // on press would (a) be triggered by BestMouseKeys' numpad-0
+        // drag-start, and (b) collide with the left-click drag the camera
+        // owns. We fall through without returning so a synthesized click
+        // that reports press+release in the same frame (e.g. BestMouseKeys
+        // numpad-5) still commits this frame.
+        if (mouse.leftButton.wasPressedThisFrame)
+        {
+            pressScreen = mouse.position.ReadValue();
+            pressing = true;
+        }
+
+        if (!mouse.leftButton.wasReleasedThisFrame || !pressing)
+            return;
+
+        pressing = false;
+
+        Vector2 releaseScreen = mouse.position.ReadValue();
+        // Same threshold CameraPan uses to activate a drag — if the cursor
+        // moved at least that far, this gesture was a pan, not a click.
+        float sqr = (releaseScreen - pressScreen).sqrMagnitude;
+        if (sqr >= CameraPan.DragActivationPixels * CameraPan.DragActivationPixels)
+            return;
+
+        Ray ray = cam.ScreenPointToRay(releaseScreen);
 
         // A click on a unit selects it.
         if (Physics.Raycast(ray, out RaycastHit hit))
