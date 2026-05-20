@@ -2,16 +2,20 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Pans the camera across the hex map in response to arrow keys (or WASD)
-/// and right-mouse-button drag, keeping the camera flying parallel to the
-/// XZ plane. Movement directions are taken from the camera's own
-/// forward/right with the Y axis flattened, so panning still feels natural
-/// when the camera is tilted.
+/// Pans the camera across the hex map in response to arrow keys (or WASD),
+/// edge-of-screen mouse pushes, and right-mouse-button drag, keeping the
+/// camera flying parallel to the XZ plane. Movement directions are taken
+/// from the camera's own forward/right with the Y axis flattened, so
+/// panning still feels natural when the camera is tilted.
 ///
 /// Right-click drag uses a "grab the world" model: the world point under
 /// the cursor when the drag started stays under the cursor for the rest of
 /// the drag, so dragging right visually moves the world right (the camera
 /// moves left).
+///
+/// Edge-scroll kicks in when the cursor sits within
+/// <see cref="edgePanMargin"/> pixels of any window edge; it is suppressed
+/// while a right-click drag is active so the two pan modes don't fight.
 ///
 /// If a <see cref="HexGrid"/> is assigned, the pan position is clamped so
 /// the camera stays roughly over the map.
@@ -32,6 +36,10 @@ public class CameraPan : MonoBehaviour
              "Camera.main if left unset.")]
     public Camera cam;
 
+    [Tooltip("Distance from the window edge (in pixels) where mouse-edge " +
+             "pan activates. Set to 0 to disable edge-scrolling.")]
+    public float edgePanMargin = 20f;
+
     // World-space point that was under the cursor when the right-mouse drag
     // started. While the drag is active, we move the camera so this same
     // point stays under the cursor every frame.
@@ -46,7 +54,11 @@ public class CameraPan : MonoBehaviour
         // at mouse-down stays under the cursor for the rest of the drag.
         position = ApplyDragPan(position);
 
-        // Keyboard pan composes on top of any drag delta this frame.
+        // Edge-of-screen pan and keyboard pan compose on top of any drag
+        // delta this frame. Edge-pan is suppressed while dragging so a
+        // drag that brushes the window border doesn't get a free boost.
+        if (!dragging)
+            position = ApplyEdgePan(position);
         position = ApplyKeyboardPan(position);
 
         transform.position = position;
@@ -58,7 +70,37 @@ public class CameraPan : MonoBehaviour
         if (keyboard == null)
             return position;
 
-        Vector2 input = ReadInput(keyboard);
+        return ApplyAxisPan(position, ReadInput(keyboard));
+    }
+
+    Vector3 ApplyEdgePan(Vector3 position)
+    {
+        if (edgePanMargin <= 0f)
+            return position;
+
+        if (!ReadMousePosition(out Vector2 screen))
+            return position;
+
+        float w = Screen.width;
+        float h = Screen.height;
+
+        // Cursor outside the game window — some platforms keep reporting
+        // a stale position, so don't pan when the user has clearly moved
+        // focus away.
+        if (screen.x < 0f || screen.x > w || screen.y < 0f || screen.y > h)
+            return position;
+
+        float x = 0f, y = 0f;
+        if (screen.x <= edgePanMargin) x = -1f;
+        else if (screen.x >= w - edgePanMargin) x = 1f;
+        if (screen.y <= edgePanMargin) y = -1f;
+        else if (screen.y >= h - edgePanMargin) y = 1f;
+
+        return ApplyAxisPan(position, new Vector2(x, y));
+    }
+
+    Vector3 ApplyAxisPan(Vector3 position, Vector2 input)
+    {
         if (input.sqrMagnitude < 0.0001f)
             return position;
 
@@ -146,6 +188,28 @@ public class CameraPan : MonoBehaviour
         screen = default;
         pressedThisFrame = false;
         return false;
+    }
+
+    // Read the current cursor position from whichever input pipeline is
+    // available, matching the dual-backend handling used for the right
+    // mouse button above.
+    static bool ReadMousePosition(out Vector2 screen)
+    {
+        var mouse = Mouse.current;
+        if (mouse != null)
+        {
+            screen = mouse.position.ReadValue();
+            return true;
+        }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        Vector3 legacy = UnityEngine.Input.mousePosition;
+        screen = new Vector2(legacy.x, legacy.y);
+        return true;
+#else
+        screen = default;
+        return false;
+#endif
     }
 
     // Raycast the cursor onto the y = position.y plane (the plane the
