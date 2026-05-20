@@ -81,12 +81,7 @@ public class CameraPan : MonoBehaviour
 
     Vector3 ApplyDragPan(Vector3 position)
     {
-        var mouse = Mouse.current;
-        if (mouse == null)
-            return position;
-
-        var rmb = mouse.rightButton;
-        if (!rmb.isPressed)
+        if (!ReadRightMouse(out Vector2 screen, out bool pressedThisFrame))
         {
             dragging = false;
             return position;
@@ -96,9 +91,7 @@ public class CameraPan : MonoBehaviour
         if (c == null)
             return position;
 
-        Vector2 screen = mouse.position.ReadValue();
-
-        if (rmb.wasPressedThisFrame || !dragging)
+        if (pressedThisFrame || !dragging)
         {
             // Start of drag: remember the world point under the cursor.
             if (TryRaycastGround(c, screen, out Vector3 anchor))
@@ -123,6 +116,36 @@ public class CameraPan : MonoBehaviour
             next = ClampToGrid(position, next);
 
         return next;
+    }
+
+    // Read the right mouse button from whichever input pipeline reports it.
+    // The new Input System (Mouse.current) reads from a lower-level source
+    // that doesn't see clicks synthesized by macOS accessibility tools like
+    // BestMouseKeys; the legacy Input API does, so we fall back to it when
+    // both backends are enabled (Project Settings -> Active Input Handling
+    // = "Both").
+    static bool ReadRightMouse(out Vector2 screen, out bool pressedThisFrame)
+    {
+        var mouse = Mouse.current;
+        if (mouse != null && mouse.rightButton.isPressed)
+        {
+            screen = mouse.position.ReadValue();
+            pressedThisFrame = mouse.rightButton.wasPressedThisFrame;
+            return true;
+        }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        if (UnityEngine.Input.GetMouseButton(1))
+        {
+            screen = UnityEngine.Input.mousePosition;
+            pressedThisFrame = UnityEngine.Input.GetMouseButtonDown(1);
+            return true;
+        }
+#endif
+
+        screen = default;
+        pressedThisFrame = false;
+        return false;
     }
 
     // Raycast the cursor onto the y = position.y plane (the plane the
