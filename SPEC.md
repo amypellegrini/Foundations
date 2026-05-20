@@ -2,6 +2,8 @@
 
 *A 4X strategy game about civilizations as flows, not stocks.*
 
+> Detailed design specs for individual systems (units, hazards, tech tree, etc.) live in [`specs/`](./specs/README.md).
+
 ---
 
 ## 1. Design Thesis
