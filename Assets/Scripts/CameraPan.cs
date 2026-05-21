@@ -19,6 +19,10 @@ using UnityEngine.InputSystem;
 /// <see cref="edgePanMargin"/> pixels of any window edge; it is suppressed
 /// while a left-click drag is active so the two pan modes don't fight.
 ///
+/// Mouse-wheel scroll zooms the camera in and out by moving along its own
+/// forward axis, clamped to <see cref="minZoomHeight"/> /
+/// <see cref="maxZoomHeight"/>.
+///
 /// If a <see cref="HexGrid"/> is assigned, the pan position is clamped so
 /// the camera stays roughly over the map.
 /// </summary>
@@ -42,6 +46,16 @@ public class CameraPan : MonoBehaviour
              "pan activates. Set to 0 to disable edge-scrolling.")]
     public float edgePanMargin = 20f;
 
+    [Tooltip("World units the camera travels along its forward axis per " +
+             "unit of scroll input. Positive scroll zooms in.")]
+    public float zoomSpeed = 0.05f;
+
+    [Tooltip("Minimum camera height (Y) when zoomed all the way in.")]
+    public float minZoomHeight = 6f;
+
+    [Tooltip("Maximum camera height (Y) when zoomed all the way out.")]
+    public float maxZoomHeight = 30f;
+
     // Pixel distance the cursor must travel while the left button is held
     // before we treat the gesture as a camera drag rather than a click. Kept
     // in sync with the matching threshold in GameController so the two
@@ -62,6 +76,11 @@ public class CameraPan : MonoBehaviour
     {
         Vector3 position = transform.position;
 
+        // Scroll-wheel zoom runs first so the drag anchor below raycasts
+        // from the post-zoom camera pose and stays consistent for the
+        // rest of the frame.
+        position = ApplyScrollZoom(position);
+
         // Left-click drag pan ("grab the world"): the world point grabbed
         // at drag activation stays under the cursor for the rest of the drag.
         position = ApplyDragPan(position);
@@ -74,6 +93,44 @@ public class CameraPan : MonoBehaviour
         position = ApplyKeyboardPan(position);
 
         transform.position = position;
+    }
+
+    Vector3 ApplyScrollZoom(Vector3 position)
+    {
+        float scroll = ReadScroll();
+        if (Mathf.Approximately(scroll, 0f))
+            return position;
+
+        Vector3 forward = transform.forward;
+        if (forward.sqrMagnitude < 0.0001f)
+            return position;
+
+        Vector3 candidate = position + forward * (scroll * zoomSpeed);
+
+        // Clamp Y to the allowed zoom range. If the height would cross a
+        // limit, snap to it and recompute the matching XZ displacement
+        // along forward so the camera continues moving toward whatever it
+        // was looking at instead of stalling against the ceiling.
+        float minY = Mathf.Min(minZoomHeight, maxZoomHeight);
+        float maxY = Mathf.Max(minZoomHeight, maxZoomHeight);
+        if (candidate.y < minY || candidate.y > maxY)
+        {
+            float targetY = Mathf.Clamp(candidate.y, minY, maxY);
+            if (Mathf.Abs(forward.y) > 0.0001f)
+            {
+                float t = (targetY - position.y) / forward.y;
+                candidate = position + forward * t;
+            }
+            else
+            {
+                candidate.y = targetY;
+            }
+        }
+
+        if (grid != null)
+            candidate = ClampToGrid(position, candidate);
+
+        return candidate;
     }
 
     Vector3 ApplyKeyboardPan(Vector3 position)
@@ -240,6 +297,25 @@ public class CameraPan : MonoBehaviour
 #else
         screen = default;
         return false;
+#endif
+    }
+
+    // Read the vertical scroll delta from whichever input pipeline reports
+    // it. Same dual-backend fallback as the mouse-button helpers above.
+    static float ReadScroll()
+    {
+        var mouse = Mouse.current;
+        if (mouse != null)
+        {
+            float y = mouse.scroll.ReadValue().y;
+            if (!Mathf.Approximately(y, 0f))
+                return y;
+        }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return UnityEngine.Input.mouseScrollDelta.y;
+#else
+        return 0f;
 #endif
     }
 
