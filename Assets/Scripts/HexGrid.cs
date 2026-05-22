@@ -22,6 +22,11 @@ public class HexGrid : MonoBehaviour
              "shader (and variants) included in player builds.")]
     public Material tileMaterial;
 
+    [Tooltip("World units that map to one full repeat of the tile texture. " +
+             "Smaller = more visible texture detail per hex. Has no effect on " +
+             "an untextured material.")]
+    public float textureWorldScale = 3f;
+
     void Start()
     {
         BuildGrid();
@@ -31,11 +36,16 @@ public class HexGrid : MonoBehaviour
     {
         var vertices = new List<Vector3>();
         var triangles = new List<int>();
+        var uvs = new List<Vector2>();
 
         // Flat-top hex spacing: columns step horizontally, every odd column
         // is nudged half a row down so the hexes interlock.
         float horizSpacing = hexSize * 1.5f;
         float vertSpacing = hexSize * Mathf.Sqrt(3f);
+
+        // World-position planar UVs let a tileable texture flow continuously
+        // across hex boundaries instead of restarting per tile.
+        float uvScale = textureWorldScale > 0f ? 1f / textureWorldScale : 0f;
 
         for (int col = 0; col < columns; col++)
         {
@@ -43,7 +53,7 @@ public class HexGrid : MonoBehaviour
             {
                 float x = col * horizSpacing;
                 float z = row * vertSpacing + (col % 2 == 1 ? vertSpacing * 0.5f : 0f);
-                AddHex(vertices, triangles, new Vector3(x, 0f, z), hexSize);
+                AddHex(vertices, triangles, uvs, new Vector3(x, 0f, z), hexSize, uvScale);
             }
         }
 
@@ -51,7 +61,9 @@ public class HexGrid : MonoBehaviour
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles, 0);
+        mesh.SetUVs(0, uvs);
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
         mesh.RecalculateBounds();
 
         GetComponent<MeshFilter>().sharedMesh = mesh;
@@ -197,17 +209,24 @@ public class HexGrid : MonoBehaviour
 
     /// <summary>
     /// Adds one flat-top hexagon (a triangle fan around its center) lying
-    /// on the XZ plane, wound so the face points up (+Y).
+    /// on the XZ plane, wound so the face points up (+Y). UVs are emitted
+    /// from each vertex's world XZ scaled by <paramref name="uvScale"/>, so
+    /// a tileable texture wraps continuously across neighboring hexes.
     /// </summary>
-    static void AddHex(List<Vector3> verts, List<int> tris, Vector3 center, float size)
+    static void AddHex(List<Vector3> verts, List<int> tris, List<Vector2> uvs,
+                       Vector3 center, float size, float uvScale)
     {
         int centerIndex = verts.Count;
         verts.Add(center);
+        uvs.Add(new Vector2(center.x * uvScale, center.z * uvScale));
 
         for (int i = 0; i < 6; i++)
         {
             float angle = Mathf.Deg2Rad * (60f * i);
-            verts.Add(center + new Vector3(Mathf.Cos(angle) * size, 0f, Mathf.Sin(angle) * size));
+            Vector3 corner = center + new Vector3(
+                Mathf.Cos(angle) * size, 0f, Mathf.Sin(angle) * size);
+            verts.Add(corner);
+            uvs.Add(new Vector2(corner.x * uvScale, corner.z * uvScale));
         }
 
         for (int i = 0; i < 6; i++)
