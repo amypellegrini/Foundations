@@ -29,6 +29,9 @@ public class Unit : MonoBehaviour
     [Tooltip("Slide speed in world units per second.")]
     public float moveSpeed = 4f;
 
+    [Tooltip("How fast the unit rotates to face its next waypoint, in degrees/sec.")]
+    public float turnSpeed = 720f;
+
     /// <summary>Tiles still available to spend this turn.</summary>
     public int MovesRemaining { get; private set; }
 
@@ -44,6 +47,14 @@ public class Unit : MonoBehaviour
     readonly List<Vector2Int> path = new List<Vector2Int>();
     readonly Queue<Vector3> waypoints = new Queue<Vector3>();
 
+    Animator animator;
+    static readonly int IsMovingParam = Animator.StringToHash("IsMoving");
+
+    void Awake()
+    {
+        animator = GetComponentInChildren<Animator>();
+    }
+
     void Start()
     {
         MovesRemaining = movesPerTurn;
@@ -52,10 +63,25 @@ public class Unit : MonoBehaviour
 
     void Update()
     {
-        if (waypoints.Count == 0)
+        bool moving = waypoints.Count > 0;
+        if (animator != null)
+            animator.SetBool(IsMovingParam, moving);
+
+        if (!moving)
             return;
 
         Vector3 target = waypoints.Peek();
+
+        // Face the next waypoint on the XZ plane before stepping toward it.
+        Vector3 facing = target - transform.position;
+        facing.y = 0f;
+        if (facing.sqrMagnitude > 0.0001f)
+        {
+            Quaternion want = Quaternion.LookRotation(facing);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation, want, turnSpeed * Time.deltaTime);
+        }
+
         transform.position = Vector3.MoveTowards(
             transform.position, target, moveSpeed * Time.deltaTime);
 
