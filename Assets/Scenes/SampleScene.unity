@@ -565,6 +565,9 @@ MonoBehaviour:
   hexSize: 1
   tileMaterial: {fileID: 2100000, guid: dad63164a82728d4cae733e94f5d574f, type: 2}
   textureWorldScale: 6
+  borderMaterial: {fileID: 2100000, guid: 0a682203646d04c4d833d248e4c8f6c3, type: 2}
+  borderWidth: 0.04
+  borderHeight: 0.02
 --- !u!23 &1140948793
 MeshRenderer:
   m_ObjectHideFlags: 0
