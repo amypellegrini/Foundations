@@ -19,6 +19,10 @@ public class Unit : MonoBehaviour
     public int col;
     public int row;
 
+    [Header("Vision")]
+    [Tooltip("Tiles around this unit revealed by line of sight. Founder = 2.")]
+    public int sightRadius = 2;
+
     [Header("Movement")]
     [Tooltip("Tiles this unit may move each turn.")]
     public int movesPerTurn = 2;

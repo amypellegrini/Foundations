@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -29,6 +30,25 @@ public class HexDecorator : MonoBehaviour
     [Tooltip("Same seed = same scatter pattern across plays.")]
     public int seed = 1337;
 
+    readonly Dictionary<Vector2Int, List<GameObject>> propsByTile =
+        new Dictionary<Vector2Int, List<GameObject>>();
+
+    /// <summary>
+    /// Toggles each tile's decorations on or off according to the predicate.
+    /// Used by fog-of-war to hide props on tiles the player can't see.
+    /// </summary>
+    public void ApplyVisibility(System.Func<int, int, bool> include)
+    {
+        if (include == null) return;
+        foreach (var kv in propsByTile)
+        {
+            bool visible = include(kv.Key.x, kv.Key.y);
+            foreach (var go in kv.Value)
+                if (go != null && go.activeSelf != visible)
+                    go.SetActive(visible);
+        }
+    }
+
     void Start()
     {
         if (grassPrefabs == null || grassPrefabs.Length == 0)
@@ -56,6 +76,7 @@ public class HexDecorator : MonoBehaviour
         Vector3 center = grid.HexCenter(col, row);
         int count = rng.Next(minPerHex, maxPerHex + 1);
 
+        var list = new List<GameObject>(count);
         for (int i = 0; i < count; i++)
         {
             // Uniform disk sample: sqrt(u) gives equal area per radial band.
@@ -71,6 +92,8 @@ public class HexDecorator : MonoBehaviour
             var prefab = grassPrefabs[rng.Next(grassPrefabs.Length)];
             var tuft = Instantiate(prefab, pos, Quaternion.Euler(0f, rotY, 0f), parent);
             tuft.transform.localScale *= scale;
+            list.Add(tuft);
         }
+        propsByTile[new Vector2Int(col, row)] = list;
     }
 }

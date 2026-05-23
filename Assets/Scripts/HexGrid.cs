@@ -42,8 +42,15 @@ public class HexGrid : MonoBehaviour
     void Start()
     {
         BuildGrid();
-        BuildBorders();
+        BuildBorders(null);
     }
+
+    /// <summary>
+    /// Rebuilds the border overlay, optionally restricted to tiles for which
+    /// <paramref name="include"/> returns true. Used by the fog-of-war system
+    /// to hide grid lines on tiles the player cannot currently see.
+    /// </summary>
+    public void RebuildBorders(System.Func<int, int, bool> include) => BuildBorders(include);
 
     void BuildGrid()
     {
@@ -121,6 +128,21 @@ public class HexGrid : MonoBehaviour
     /// <summary>True if the given offset coordinates lie on the grid.</summary>
     public bool InBounds(int col, int row)
         => col >= 0 && col < columns && row >= 0 && row < rows;
+
+    /// <summary>
+    /// Hex distance (in tiles) between two offset coordinates. Uses the
+    /// standard cube-coordinate conversion for odd-column offset layouts.
+    /// </summary>
+    public static int HexDistance(int colA, int rowA, int colB, int rowB)
+    {
+        int ax = colA;
+        int az = rowA - (colA - (colA & 1)) / 2;
+        int ay = -ax - az;
+        int bx = colB;
+        int bz = rowB - (colB - (colB & 1)) / 2;
+        int by = -bx - bz;
+        return (Mathf.Abs(ax - bx) + Mathf.Abs(ay - by) + Mathf.Abs(az - bz)) / 2;
+    }
 
     static readonly Vector2Int[] EvenColumnNeighbors =
     {
@@ -227,7 +249,7 @@ public class HexGrid : MonoBehaviour
     /// are drawn twice — the overdraw is cheap and the alternative (edge
     /// deduplication) isn't worth the complexity for a static grid.
     /// </summary>
-    void BuildBorders()
+    void BuildBorders(System.Func<int, int, bool> include)
     {
         Transform existing = transform.Find("HexBorders");
         if (borderMaterial == null)
@@ -247,6 +269,8 @@ public class HexGrid : MonoBehaviour
         {
             for (int row = 0; row < rows; row++)
             {
+                if (include != null && !include(col, row))
+                    continue;
                 float x = col * horizSpacing;
                 float z = row * vertSpacing + (col % 2 == 1 ? vertSpacing * 0.5f : 0f);
                 Vector3[] corners = HexCorners(new Vector3(x, 0f, z), hexSize);

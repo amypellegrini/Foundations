@@ -21,6 +21,7 @@ Three commitments shape every spec in this folder:
 | [`03-hunter-unit.md`](./03-hunter-unit.md) | The Hunter unit: economic function, tech-gated abilities, deception mechanics |
 | [`04-founding-parties.md`](./04-founding-parties.md) | Founder + escort dynamics, the founding-party narrative, what arrives at the new city |
 | [`05-tech-tree-era-1.md`](./05-tech-tree-era-1.md) | Era I (Sedentary Era) tech tree: techs, dependencies, what each unlocks |
+| [`06-fog-of-war.md`](./06-fog-of-war.md) | Three-tier visibility (Visible / Explored / Unknown), per-unit sight, what each tier hides and reveals |
 
 ## Open questions
 
