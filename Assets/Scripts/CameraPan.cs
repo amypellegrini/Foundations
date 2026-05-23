@@ -61,7 +61,7 @@ public class CameraPan : MonoBehaviour
     public float orthoZoomSpeed = 0.5f;
 
     [Tooltip("Minimum orthographicSize when zoomed all the way in (orthographic mode).")]
-    public float minOrthoSize = 3f;
+    public float minOrthoSize = 1f;
 
     [Tooltip("Maximum orthographicSize when zoomed all the way out (orthographic mode).")]
     public float maxOrthoSize = 5f;

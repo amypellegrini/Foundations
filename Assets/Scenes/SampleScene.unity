@@ -279,7 +279,7 @@ MonoBehaviour:
   maxZoomHeight: 30
   orthoZoomSpeed: 0.5
   minOrthoSize: 3
-  maxOrthoSize: 5
+  maxOrthoSize: 10
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
