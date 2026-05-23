@@ -19,17 +19,27 @@ Every tile, for every civilization, is in exactly one of three states:
 | Tier | Definition | Render |
 |---|---|---|
 | **Visible** | At least one friendly unit (or settlement) has direct line of sight to the tile *this turn*. | Full color. Tile texture, decor, and grid borders all visible. Live state — units, hazards, animations all render here. |
-| **Explored** | Has been visible at some point in the past, but is not visible right now. | Dimmed under a translucent dark overlay. Ground texture remains faintly readable; grid borders are no longer drawn; decor is hidden. Represents memory, not current knowledge. |
-| **Unknown** | Has never been visible to this civilization. | Fully covered by a near-opaque dark overlay. No ground, no decor, no borders — just shadow. |
+| **Explored** | Has been visible at some point in the past, but is not visible right now. The tile carries a **freshness** value — 100% the turn the unit leaves it, decaying by 10 percentage points each turn. | Dimmed under a translucent dark overlay whose opacity scales with how stale the memory is. At 100% freshness the overlay is light enough to read the ground beneath; at 10% it is almost as dark as Unknown. Grid borders are not drawn; decor is hidden. |
+| **Unknown** | Has never been visible — or was Explored and the memory has fully decayed. | Fully covered by a near-opaque dark overlay. No ground, no decor, no borders — just shadow. |
 
-Once a tile becomes Explored it can never regress to Unknown. The only
-transitions are:
+Memory is not permanent. Explored is a transitional state: every turn that
+passes without re-establishing sight, the tile slides ten percentage points
+closer to Unknown, and after ten such turns it returns to Unknown
+entirely. Re-entering sight at any point resets the tile to fresh.
 
 ```
-Unknown  --(enters sight)-->  Visible
-Visible  --(leaves sight)-->  Explored
-Explored --(re-enters sight)-->  Visible
+Unknown                  --(enters sight)----->  Visible
+Visible                  --(leaves sight)----->  Explored (freshness 100%)
+Explored                 --(re-enters sight)-->  Visible
+Explored                 --(turn elapses)----->  Explored (freshness −10%)
+Explored (freshness 0%)  --(turn elapses)----->  Unknown
 ```
+
+The decay is what makes fog feel **temporal** rather than just spatial.
+Old memory should look old; very old memory should be indistinguishable
+from never having seen the tile at all. This is the seed of the
+stale-intelligence system ([`SPEC.md` §3.4](../SPEC.md)) — confidence in
+what you know about a tile is bounded by how recently you saw it.
 
 ## Sight and how it propagates
 
@@ -91,18 +101,28 @@ discovers what is there as the unit walks.
 
 ## When fog updates
 
-Fog recomputes whenever a unit's tile changes — both at the start of a turn
-(unit position may have changed) and during a slide animation (so the
-reveal happens in step with the unit's movement, not in an instant after).
-Newly-illuminated Unknown tiles transition straight to Visible; the
-Explored state only applies when a tile that *was* Visible last frame is
-no longer in the union.
+Two clocks drive fog state:
+
+- **Sight changes** — recompute whenever a unit's tile changes, both at
+  the start of a turn (unit position may have changed) and during a slide
+  animation (so the reveal happens in step with the unit's movement, not
+  in an instant after). Newly-illuminated Unknown tiles transition
+  straight to Visible; the Explored state only applies when a tile that
+  *was* Visible last frame is no longer in the union.
+- **Turn ticks** — each time a turn advances, every Explored tile loses
+  10% freshness. Tiles whose freshness reaches zero transition to
+  Unknown. Freshness only ticks on full turn advances, not on every
+  player action.
 
 ## Rendering notes (implementation)
 
-- The fog overlay is a separate, regenerated mesh layered above the hex
-  grid. It is rebuilt only when the visibility set changes — not every
-  frame.
+- The fog overlay is a set of regenerated meshes layered above the hex
+  grid, rebuilt only when the tile state changes — not every frame.
+- To support the freshness gradient, the overlay is split into one mesh
+  per decay step plus one for Unknown. Each mesh shares the same base
+  material; per-mesh alpha is overridden via `MaterialPropertyBlock`.
+  A tile at freshness step *k* (0 = just lapsed, *decayTurns − 1* = about
+  to fully decay) draws at `lerp(exploredAlpha, unknownAlpha, k / decayTurns)`.
 - Grid border lines are part of the fog system: only tiles in the Visible
   tier draw their borders. Explored tiles look like dimmed ground without
   the grid structure on top; Unknown tiles are pure shadow.
@@ -122,7 +142,13 @@ no longer in the union.
   settlement, scaling with city size or specific doctrines.
 - **Should Explored show *when* it was last seen?** A subtle "last seen
   turn N" overlay sets up the stale-intelligence system cleanly but adds
-  UI weight. Probably worth it — but not in this slice.
+  UI weight. Probably worth it — but not in this slice. The continuous
+  freshness fade already conveys recency at a glance, which may be
+  enough for the prototype.
+- **Decay rate per biome.** A scout's memory of an open plain probably
+  ages slower than their memory of a contested border. Holding the rate
+  flat (10% per turn) is fine for the slice; per-biome or
+  per-circumstance decay can come later.
 - **Fog of war and the AI.** The AI is supposed to operate under the same
   fog ([`SPEC.md` §4](../SPEC.md)). The data model already supports
   per-civ fog; the AI behavior that *uses* it is a separate, later spec.

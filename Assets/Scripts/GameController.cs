@@ -23,6 +23,9 @@ public class GameController : MonoBehaviour
     [Tooltip("Route line showing the selected unit's projected path.")]
     public PathHighlight pathHighlight;
 
+    [Tooltip("Fog-of-war system; ticked once per turn so Explored memory decays.")]
+    public FogOfWar fogOfWar;
+
     /// <summary>Current turn number, starting at 1.</summary>
     public int Turn { get; private set; } = 1;
 
@@ -178,6 +181,8 @@ public class GameController : MonoBehaviour
             if (unit.Path.Count > 0)
                 unit.MoveAlongPath();
         }
+        if (fogOfWar != null)
+            fogOfWar.OnTurnAdvance();
         RefreshHighlights();
     }
 

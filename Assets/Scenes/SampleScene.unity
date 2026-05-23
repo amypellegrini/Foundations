@@ -518,6 +518,7 @@ MonoBehaviour:
   grid: {fileID: 1140948792}
   selectionHighlight: {fileID: 1255512125}
   pathHighlight: {fileID: 1592307854}
+  fogOfWar: {fileID: 1140948796}
 --- !u!4 &845079104
 Transform:
   m_ObjectHideFlags: 0
@@ -762,8 +763,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd31c9bb2dcd347fd9f1a7a83c678fe8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FogOfWar
-  unknownMaterial: {fileID: 2100000, guid: 7c1d8a4b9e2f4a3c8d5b6f7a8e9c0d12, type: 2}
-  exploredMaterial: {fileID: 2100000, guid: 8e2f9b5c0a3d5b4d9e6c7a8b9f0d1e23, type: 2}
+  fogMaterial: {fileID: 2100000, guid: 7c1d8a4b9e2f4a3c8d5b6f7a8e9c0d12, type: 2}
+  decayTurns: 10
+  exploredAlpha: 0.55
+  unknownAlpha: 0.95
   heightOffset: 0.04
   decorator: {fileID: 0}
 --- !u!1 &1255512124
