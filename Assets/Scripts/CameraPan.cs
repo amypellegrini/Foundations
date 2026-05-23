@@ -47,14 +47,24 @@ public class CameraPan : MonoBehaviour
     public float edgePanMargin = 20f;
 
     [Tooltip("World units the camera travels along its forward axis per " +
-             "unit of scroll input. Positive scroll zooms in.")]
+             "unit of scroll input (perspective mode). Positive scroll zooms in.")]
     public float zoomSpeed = 0.05f;
 
-    [Tooltip("Minimum camera height (Y) when zoomed all the way in.")]
+    [Tooltip("Minimum camera height (Y) when zoomed all the way in (perspective mode).")]
     public float minZoomHeight = 6f;
 
-    [Tooltip("Maximum camera height (Y) when zoomed all the way out.")]
+    [Tooltip("Maximum camera height (Y) when zoomed all the way out (perspective mode).")]
     public float maxZoomHeight = 30f;
+
+    [Tooltip("World units of orthographicSize per unit of scroll input " +
+             "(orthographic mode). Positive scroll zooms in (shrinks size).")]
+    public float orthoZoomSpeed = 0.5f;
+
+    [Tooltip("Minimum orthographicSize when zoomed all the way in (orthographic mode).")]
+    public float minOrthoSize = 6f;
+
+    [Tooltip("Maximum orthographicSize when zoomed all the way out (orthographic mode).")]
+    public float maxOrthoSize = 35f;
 
     // Pixel distance the cursor must travel while the left button is held
     // before we treat the gesture as a camera drag rather than a click. Kept
@@ -100,6 +110,18 @@ public class CameraPan : MonoBehaviour
         float scroll = ReadScroll();
         if (Mathf.Approximately(scroll, 0f))
             return position;
+
+        Camera c = cam != null ? cam : Camera.main;
+        if (c != null && c.orthographic)
+        {
+            // Orthographic mode: zoom by shrinking/growing orthographicSize.
+            // The camera doesn't physically move — pan position is unchanged.
+            float size = c.orthographicSize - scroll * orthoZoomSpeed;
+            c.orthographicSize = Mathf.Clamp(size,
+                Mathf.Min(minOrthoSize, maxOrthoSize),
+                Mathf.Max(minOrthoSize, maxOrthoSize));
+            return position;
+        }
 
         Vector3 forward = transform.forward;
         if (forward.sqrMagnitude < 0.0001f)
