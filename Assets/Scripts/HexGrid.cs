@@ -33,7 +33,7 @@ public class HexGrid : MonoBehaviour
     public Material borderMaterial;
 
     [Tooltip("World-space thickness of each hex edge.")]
-    public float borderWidth = 0.04f;
+    public float borderWidth = 0.02f;
 
     [Tooltip("How far above the tile mesh the border quads sit, in world units. " +
              "Just enough to avoid z-fighting with the textured ground.")]
