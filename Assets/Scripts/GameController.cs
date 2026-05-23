@@ -58,7 +58,12 @@ public class GameController : MonoBehaviour
         if (selectedUnit != null && selectedUnit.IsMoving &&
             grid.TryWorldToHex(selectedUnit.transform.position, out int c, out int r))
         {
-            selectionHighlight.ShowAt(grid.HexCenter(c, r));
+            Vector3 center = grid.HexCenter(c, r);
+            // Match the wrap copy the unit is currently displayed in, so the
+            // outline doesn't snap back to canonical X when the camera is
+            // looking at the unit through a ghost.
+            center = grid.WrapToCamera(center, selectedUnit.transform.position.x);
+            selectionHighlight.ShowAt(center);
         }
     }
 
@@ -201,10 +206,29 @@ public class GameController : MonoBehaviour
 
         if (!selectedUnit.IsMoving && selectedUnit.Path.Count > 0)
         {
+            // Build the polyline in continuous world coordinates so a route
+            // that crosses the E-W seam draws as a straight line east/west
+            // through the ghost copies, not a sudden snap back across the
+            // whole map. Each waypoint is offset by ±WorldWidth as needed
+            // to stay close to the previous point.
             var points = new List<Vector3>(selectedUnit.Path.Count + 1);
-            points.Add(grid.HexCenter(selectedUnit.col, selectedUnit.row));
+            float cameraX = cam != null ? cam.transform.position.x : 0f;
+            Vector3 prev = grid.HexCenter(selectedUnit.col, selectedUnit.row);
+            prev = grid.WrapToCamera(prev, cameraX);
+            points.Add(prev);
             foreach (var tile in selectedUnit.Path)
-                points.Add(grid.HexCenter(tile.x, tile.y));
+            {
+                Vector3 p = grid.HexCenter(tile.x, tile.y);
+                if (grid.wrap)
+                {
+                    float W = grid.WorldWidth;
+                    float dx = p.x - prev.x;
+                    while (dx > W * 0.5f) { p.x -= W; dx -= W; }
+                    while (dx < -W * 0.5f) { p.x += W; dx += W; }
+                }
+                points.Add(p);
+                prev = p;
+            }
             pathHighlight.Show(points);
         }
         else

@@ -29,7 +29,7 @@ using UnityEngine.InputSystem;
 public class CameraPan : MonoBehaviour
 {
     [Tooltip("World units per second when fully held.")]
-    public float panSpeed = 12f;
+    public float panSpeed = 50f;
 
     [Tooltip("Optional grid used to clamp the camera to the map's footprint.")]
     public HexGrid grid;
@@ -58,10 +58,10 @@ public class CameraPan : MonoBehaviour
 
     [Tooltip("World units of orthographicSize per unit of scroll input " +
              "(orthographic mode). Positive scroll zooms in (shrinks size).")]
-    public float orthoZoomSpeed = 0.5f;
+    public float orthoZoomSpeed = 3f;
 
     [Tooltip("Minimum orthographicSize when zoomed all the way in (orthographic mode).")]
-    public float minOrthoSize = 1f;
+    public float minOrthoSize = 4f;
 
     [Tooltip("Maximum orthographicSize when zoomed all the way out (orthographic mode).")]
     public float maxOrthoSize = 5f;
@@ -101,6 +101,22 @@ public class CameraPan : MonoBehaviour
         if (!dragging)
             position = ApplyEdgePan(position);
         position = ApplyKeyboardPan(position);
+
+        // Cylindrical grids let the camera roam unbounded in X. Re-wrap
+        // it into [0, WorldWidth) at the end of each frame so coordinates
+        // don't drift forever, and shift any active drag anchor by the
+        // same amount so the world-grab math stays consistent.
+        if (grid != null && grid.wrap && grid.WorldWidth > 0f)
+        {
+            float W = grid.WorldWidth;
+            float wrappedX = position.x - Mathf.Floor(position.x / W) * W;
+            float shift = wrappedX - position.x;
+            if (shift != 0f)
+            {
+                position.x = wrappedX;
+                if (dragging) dragAnchorWorld.x += shift;
+            }
+        }
 
         transform.position = position;
     }
@@ -371,8 +387,6 @@ public class CameraPan : MonoBehaviour
     {
         Vector3 a = grid.HexCenter(0, 0);
         Vector3 b = grid.HexCenter(grid.columns - 1, grid.rows - 1);
-        float minX = Mathf.Min(a.x, b.x) - clampMargin;
-        float maxX = Mathf.Max(a.x, b.x) + clampMargin;
         float minZ = Mathf.Min(a.z, b.z) - clampMargin;
         float maxZ = Mathf.Max(a.z, b.z) + clampMargin;
 
@@ -383,8 +397,17 @@ public class CameraPan : MonoBehaviour
         // (especially at full zoom-in). Subtracting the offset converts the
         // bounds from look-at space into camera-position space.
         Vector3 offset = GroundLookAtOffset(next);
-        next.x = SoftClamp(current.x, next.x, minX - offset.x, maxX - offset.x);
         next.z = SoftClamp(current.z, next.z, minZ - offset.z, maxZ - offset.z);
+
+        // Only the N-S poles are hard edges on a cylindrical grid; with
+        // wrap on, the camera roams free in X (re-wrapped at the end of
+        // Update). When wrap is off, fall back to the original X clamp.
+        if (!grid.wrap)
+        {
+            float minX = Mathf.Min(a.x, b.x) - clampMargin;
+            float maxX = Mathf.Max(a.x, b.x) + clampMargin;
+            next.x = SoftClamp(current.x, next.x, minX - offset.x, maxX - offset.x);
+        }
         return next;
     }
 

@@ -23,11 +23,9 @@ public enum TileVisibility
 /// <summary>
 /// Three-tier fog of war (Unknown / Explored / Visible) computed from the
 /// union of all friendly units' sight radii, with Explored tiles fading
-/// back to Unknown over <see cref="decayTurns"/> turn ticks. Renders the
-/// non-Visible tiers as one mesh per decay step plus one for Unknown,
-/// sharing a single base material whose alpha is overridden per-mesh via
-/// <see cref="MaterialPropertyBlock"/>. Drives
-/// <see cref="HexGrid.RebuildBorders"/> and
+/// back to Unknown over <see cref="decayTurns"/> turn ticks. Overlay meshes
+/// are split per <see cref="HexChunk"/> so fog is culled with the chunk it
+/// belongs to. Drives <see cref="HexGrid.RebuildBorders"/> and
 /// <see cref="HexDecorator.ApplyVisibility"/> so that grid lines and props
 /// only show on Visible tiles. See <c>specs/06-fog-of-war.md</c>.
 /// </summary>
@@ -69,8 +67,14 @@ public class FogOfWar : MonoBehaviour
     // to Unknown). Only meaningful while state[c,r] == Explored.
     int[,] freshnessStep;
 
-    Mesh[] exploredMeshes;     // one per decay step in [0, decayTurns)
-    Mesh unknownMesh;
+    // Per-chunk overlay meshes: explored layers (one per decay step) and
+    // one unknown layer, parented under each chunk's GameObject so they
+    // ride the chunk's culling on/off in one operation.
+    readonly Dictionary<HexChunk, Mesh[]> chunkExploredMeshes =
+        new Dictionary<HexChunk, Mesh[]>();
+    readonly Dictionary<HexChunk, Mesh> chunkUnknownMeshes =
+        new Dictionary<HexChunk, Mesh>();
+
     int lastUnitsHash;
     bool initialized;
 
@@ -86,7 +90,7 @@ public class FogOfWar : MonoBehaviour
     void OnEnable()
     {
         // Defer initial mesh build to the first LateUpdate so HexGrid and
-        // HexDecorator have completed their own Start() work first.
+        // HexDecorator have completed their own setup first.
         initialized = false;
     }
 
@@ -114,7 +118,8 @@ public class FogOfWar : MonoBehaviour
         freshnessStep = new int[grid.columns, grid.rows];
 
         // Wipe any layer GameObjects left over from a previous version of
-        // this component (the old two-material design).
+        // this component (the old non-chunked design parented Fog* directly
+        // under HexGrid).
         for (int i = transform.childCount - 1; i >= 0; i--)
         {
             var child = transform.GetChild(i);
@@ -122,20 +127,37 @@ public class FogOfWar : MonoBehaviour
                 DestroyImmediate(child.gameObject);
         }
 
-        exploredMeshes = new Mesh[decayTurns];
-        for (int i = 0; i < decayTurns; i++)
+        if (fogMaterial == null)
         {
-            float t = (float)i / decayTurns;
-            float alpha = Mathf.Lerp(exploredAlpha, unknownAlpha, t);
-            exploredMeshes[i] = CreateOverlayLayer($"FogExplored_{i:00}", alpha);
+            Debug.LogError("FogOfWar: fogMaterial is not assigned.", this);
+            return;
         }
-        unknownMesh = CreateOverlayLayer("FogUnknown", unknownAlpha);
+
+        chunkExploredMeshes.Clear();
+        chunkUnknownMeshes.Clear();
+        foreach (var chunk in grid.Chunks)
+        {
+            var container = new GameObject("Fog");
+            container.transform.SetParent(chunk.transform, worldPositionStays: false);
+
+            var exploredMeshes = new Mesh[decayTurns];
+            for (int i = 0; i < decayTurns; i++)
+            {
+                float t = (float)i / decayTurns;
+                float alpha = Mathf.Lerp(exploredAlpha, unknownAlpha, t);
+                exploredMeshes[i] = CreateOverlayLayer(container.transform,
+                    $"FogExplored_{i:00}", alpha);
+            }
+            chunkExploredMeshes[chunk] = exploredMeshes;
+            chunkUnknownMeshes[chunk] = CreateOverlayLayer(container.transform,
+                "FogUnknown", unknownAlpha);
+        }
     }
 
-    Mesh CreateOverlayLayer(string name, float alpha)
+    Mesh CreateOverlayLayer(Transform parent, string name, float alpha)
     {
         var go = new GameObject(name);
-        go.transform.SetParent(transform, worldPositionStays: false);
+        go.transform.SetParent(parent, worldPositionStays: false);
 
         var mesh = new Mesh
         {
@@ -154,9 +176,6 @@ public class FogOfWar : MonoBehaviour
         mpb.SetColor(BaseColorId, c);
         mpb.SetColor(ColorId, c);
         mr.SetPropertyBlock(mpb);
-
-        if (fogMaterial == null)
-            Debug.LogError("FogOfWar: fogMaterial is not assigned.", this);
 
         return mesh;
     }
@@ -191,14 +210,22 @@ public class FogOfWar : MonoBehaviour
                 ur = wr;
             }
 
-            int minCol = Mathf.Max(0, uc - u.sightRadius);
-            int maxCol = Mathf.Min(grid.columns - 1, uc + u.sightRadius);
+            // Sweep the (2r+1)-by-(2r+1) bounding square of the unit's sight
+            // radius, wrapping the column into the canonical range when wrap
+            // is on — that's what lets a unit on the seam reveal tiles on
+            // both sides. Rows clamp because the poles don't wrap.
             int minRow = Mathf.Max(0, ur - u.sightRadius);
             int maxRow = Mathf.Min(grid.rows - 1, ur + u.sightRadius);
-            for (int c = minCol; c <= maxCol; c++)
+            for (int dc = -u.sightRadius; dc <= u.sightRadius; dc++)
+            {
+                int c = grid.WrapColumn(uc + dc);
+                if (!grid.wrap && (c < 0 || c >= grid.columns)) continue;
                 for (int r = minRow; r <= maxRow; r++)
-                    if (HexGrid.HexDistance(uc, ur, c, r) <= u.sightRadius)
+                {
+                    if (grid.Distance(uc, ur, c, r) <= u.sightRadius)
                         nextVisible.Add(new Vector2Int(c, r));
+                }
+            }
         }
 
         bool changed = force;
@@ -278,15 +305,17 @@ public class FogOfWar : MonoBehaviour
 
         // Only the fog meshes change on a decay tick — tier-level visibility
         // is the same, so borders and decor don't need to be rebuilt unless
-        // a tile crossed Explored → Unknown. They do here only if at least
-        // one tile crossed, but rebuilding both is cheap and unconditional
-        // keeps the code simple.
+        // a tile crossed Explored → Unknown. Rebuilding unconditionally is
+        // cheap (only affected chunks emit any geometry) and keeps the code
+        // simple.
         if (changed)
             RebuildOverlayMeshes();
     }
 
     void RebuildOverlayMeshes()
     {
+        // Per-chunk geometry buffers reused across chunks to avoid the
+        // per-tile garbage from allocating fresh lists each iteration.
         var unknownVerts = new List<Vector3>();
         var unknownTris = new List<int>();
         var exploredVerts = new List<Vector3>[decayTurns];
@@ -301,33 +330,48 @@ public class FogOfWar : MonoBehaviour
         float horizSpacing = grid.HorizontalSpacing;
         float vertSpacing = grid.VerticalSpacing;
 
-        for (int col = 0; col < grid.columns; col++)
+        foreach (var chunk in grid.Chunks)
         {
-            for (int row = 0; row < grid.rows; row++)
+            unknownVerts.Clear();
+            unknownTris.Clear();
+            for (int i = 0; i < decayTurns; i++)
             {
-                var s = state[col, row];
-                if (s == TileVisibility.Visible)
-                    continue;
+                exploredVerts[i].Clear();
+                exploredTris[i].Clear();
+            }
 
-                float x = col * horizSpacing;
-                float z = row * vertSpacing + (col % 2 == 1 ? vertSpacing * 0.5f : 0f);
-                Vector3 center = new Vector3(x, 0f, z) + lift;
+            for (int col = chunk.ColStart; col < chunk.ColEnd; col++)
+            {
+                for (int row = chunk.RowStart; row < chunk.RowEnd; row++)
+                {
+                    var s = state[col, row];
+                    if (s == TileVisibility.Visible)
+                        continue;
 
-                if (s == TileVisibility.Unknown)
-                {
-                    AddHexFan(unknownVerts, unknownTris, center, grid.hexSize);
-                }
-                else
-                {
-                    int step = Mathf.Clamp(freshnessStep[col, row], 0, decayTurns - 1);
-                    AddHexFan(exploredVerts[step], exploredTris[step], center, grid.hexSize);
+                    float x = col * horizSpacing;
+                    float z = row * vertSpacing + (col % 2 == 1 ? vertSpacing * 0.5f : 0f);
+                    Vector3 center = new Vector3(x, 0f, z) + lift;
+
+                    if (s == TileVisibility.Unknown)
+                    {
+                        AddHexFan(unknownVerts, unknownTris, center, grid.hexSize);
+                    }
+                    else
+                    {
+                        int step = Mathf.Clamp(freshnessStep[col, row], 0, decayTurns - 1);
+                        AddHexFan(exploredVerts[step], exploredTris[step], center, grid.hexSize);
+                    }
                 }
             }
-        }
 
-        ApplyMesh(unknownMesh, unknownVerts, unknownTris);
-        for (int i = 0; i < decayTurns; i++)
-            ApplyMesh(exploredMeshes[i], exploredVerts[i], exploredTris[i]);
+            if (chunkUnknownMeshes.TryGetValue(chunk, out var unknownMesh))
+                ApplyMesh(unknownMesh, unknownVerts, unknownTris);
+            if (chunkExploredMeshes.TryGetValue(chunk, out var exploredMeshes))
+            {
+                for (int i = 0; i < decayTurns; i++)
+                    ApplyMesh(exploredMeshes[i], exploredVerts[i], exploredTris[i]);
+            }
+        }
     }
 
     static void ApplyMesh(Mesh mesh, List<Vector3> verts, List<int> tris)

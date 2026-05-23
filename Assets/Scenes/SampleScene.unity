@@ -269,7 +269,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2634496df68644d4cae7b931a6dcbbe0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraPan
-  panSpeed: 12
+  panSpeed: 50
   grid: {fileID: 1140948792}
   clampMargin: 4
   cam: {fileID: 0}
@@ -277,9 +277,9 @@ MonoBehaviour:
   zoomSpeed: 0.05
   minZoomHeight: 6
   maxZoomHeight: 30
-  orthoZoomSpeed: 0.5
-  minOrthoSize: 3
-  maxOrthoSize: 10
+  orthoZoomSpeed: 3
+  minOrthoSize: 4
+  maxOrthoSize: 5
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -652,6 +652,7 @@ GameObject:
   - component: {fileID: 1140948793}
   - component: {fileID: 1140948792}
   - component: {fileID: 1140948796}
+  - component: {fileID: 1140948797}
   m_Layer: 0
   m_Name: HexGrid
   m_TagString: Untagged
@@ -671,9 +672,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f7288050214e9941b7daf6b8e48cfff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexGrid
-  columns: 40
-  rows: 30
+  columns: 512
+  rows: 256
   hexSize: 1
+  chunkSize: 16
+  wrap: 1
   tileMaterial: {fileID: 2100000, guid: dad63164a82728d4cae733e94f5d574f, type: 2}
   textureWorldScale: 6
   borderMaterial: {fileID: 2100000, guid: 0a682203646d04c4d833d248e4c8f6c3, type: 2}
@@ -769,6 +772,23 @@ MonoBehaviour:
   unknownAlpha: 0.95
   heightOffset: 0.04
   decorator: {fileID: 0}
+--- !u!114 &1140948797
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1140948791}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17c1cda4cc451498c9ebbb0442e7b8aa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HexGridCulling
+  cam: {fileID: 0}
+  grid: {fileID: 0}
+  padding: 24
+  fallbackRadius: 50
+  ghostWarmupFrames: 2
 --- !u!1 &1255512124
 GameObject:
   m_ObjectHideFlags: 0

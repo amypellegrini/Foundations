@@ -4,7 +4,9 @@ using UnityEngine;
 /// <summary>
 /// Scatters small decorative props (grass tufts, etc.) across every tile of
 /// the attached <see cref="HexGrid"/> at runtime, using a deterministic
-/// per-tile seed so the same layout reappears across plays.
+/// per-tile seed so the same layout reappears across plays. Props are
+/// parented under their owning <see cref="HexChunk"/> so they get culled in
+/// bulk with the chunk.
 /// </summary>
 [RequireComponent(typeof(HexGrid))]
 public class HexDecorator : MonoBehaviour
@@ -58,12 +60,17 @@ public class HexDecorator : MonoBehaviour
         }
 
         var grid = GetComponent<HexGrid>();
-        var parent = new GameObject("Decorations").transform;
-        parent.SetParent(transform, worldPositionStays: false);
+        foreach (var chunk in grid.Chunks)
+        {
+            // Per-chunk container so a single SetActive on the chunk hides
+            // every prop inside it when frustum culling kicks in.
+            var parent = new GameObject("Decorations").transform;
+            parent.SetParent(chunk.transform, worldPositionStays: false);
 
-        for (int col = 0; col < grid.columns; col++)
-            for (int row = 0; row < grid.rows; row++)
-                ScatterOnHex(grid, col, row, parent);
+            for (int col = chunk.ColStart; col < chunk.ColEnd; col++)
+                for (int row = chunk.RowStart; row < chunk.RowEnd; row++)
+                    ScatterOnHex(grid, col, row, parent);
+        }
     }
 
     void ScatterOnHex(HexGrid grid, int col, int row, Transform parent)
