@@ -780,7 +780,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HexHighlight
   radius: 1
   heightOffset: 0.04
-  lineWidth: 0.12
+  lineWidth: 0.06
   borderMaterial: {fileID: 2100000, guid: c8ef37a3bbff14683bb91c519f7c2adb, type: 2}
 --- !u!120 &1255512126
 LineRenderer:
