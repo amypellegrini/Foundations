@@ -375,9 +375,29 @@ public class CameraPan : MonoBehaviour
         float maxX = Mathf.Max(a.x, b.x) + clampMargin;
         float minZ = Mathf.Min(a.z, b.z) - clampMargin;
         float maxZ = Mathf.Max(a.z, b.z) + clampMargin;
-        next.x = SoftClamp(current.x, next.x, minX, maxX);
-        next.z = SoftClamp(current.z, next.z, minZ, maxZ);
+
+        // Clamp the camera's ground look-at point — not the transform — into
+        // the map bounds. With a tilted camera the transform sits offset
+        // along XZ from what's actually being viewed, so clamping the
+        // transform itself locks the view well short of the far edges
+        // (especially at full zoom-in). Subtracting the offset converts the
+        // bounds from look-at space into camera-position space.
+        Vector3 offset = GroundLookAtOffset(next);
+        next.x = SoftClamp(current.x, next.x, minX - offset.x, maxX - offset.x);
+        next.z = SoftClamp(current.z, next.z, minZ - offset.z, maxZ - offset.z);
         return next;
+    }
+
+    // XZ offset from the given camera position to where its forward ray
+    // intersects the y = 0 ground plane. Zero when the camera is at/below
+    // the ground or pointing parallel to / away from it.
+    Vector3 GroundLookAtOffset(Vector3 candidatePos)
+    {
+        Vector3 forward = transform.forward;
+        if (candidatePos.y <= 0f || forward.y >= -0.0001f)
+            return Vector3.zero;
+        float t = -candidatePos.y / forward.y;
+        return new Vector3(forward.x * t, 0f, forward.z * t);
     }
 
     // Clamp `next` into [min,max], but if `current` is already outside the
