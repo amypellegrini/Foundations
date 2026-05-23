@@ -671,9 +671,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HexHighlight
   radius: 1
-  heightOffset: 0.02
-  lineWidth: 0.08
-  borderMaterial: {fileID: 2100000, guid: 0a682203646d04c4d833d248e4c8f6c3, type: 2}
+  heightOffset: 0.04
+  lineWidth: 0.12
+  borderMaterial: {fileID: 2100000, guid: c8ef37a3bbff14683bb91c519f7c2adb, type: 2}
 --- !u!120 &1255512126
 LineRenderer:
   serializedVersion: 3
