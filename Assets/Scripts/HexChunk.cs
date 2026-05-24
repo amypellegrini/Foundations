@@ -113,7 +113,30 @@ public class HexChunk : MonoBehaviour
         var dup = ghost.GetComponent<HexChunk>();
         if (dup != null) Destroy(dup);
 
+        // Instantiate does not copy MaterialPropertyBlocks set via
+        // SetPropertyBlock — they are per-renderer runtime state. Walk
+        // both subtrees in lockstep and re-apply each canonical renderer's
+        // property block to its ghost counterpart, so per-layer fog alphas
+        // (and any future MPB tweaks) survive the clone.
+        CopyMaterialPropertyBlocks(transform, ghost.transform);
+
         ghost.SetActive(false);
         return ghost;
+    }
+
+    static void CopyMaterialPropertyBlocks(Transform source, Transform clone)
+    {
+        var srcRenderer = source.GetComponent<Renderer>();
+        var dstRenderer = clone.GetComponent<Renderer>();
+        if (srcRenderer != null && dstRenderer != null && srcRenderer.HasPropertyBlock())
+        {
+            var mpb = new MaterialPropertyBlock();
+            srcRenderer.GetPropertyBlock(mpb);
+            dstRenderer.SetPropertyBlock(mpb);
+        }
+
+        int count = Mathf.Min(source.childCount, clone.childCount);
+        for (int i = 0; i < count; i++)
+            CopyMaterialPropertyBlocks(source.GetChild(i), clone.GetChild(i));
     }
 }
