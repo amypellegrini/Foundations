@@ -219,13 +219,25 @@ public class CameraPan : MonoBehaviour
         right.y = 0f;
         right.Normalize();
 
-        Vector3 delta = (right * input.x + forward * input.y) * panSpeed * Time.deltaTime;
+        Vector3 delta = (right * input.x + forward * input.y) * (panSpeed * ZoomPanMultiplier() * Time.deltaTime);
         Vector3 next = position + delta;
 
         if (grid != null)
             next = ClampToGrid(position, next);
 
         return next;
+    }
+
+    // In ortho mode, keyboard/edge pan should feel the same on screen at any
+    // zoom level. panSpeed is treated as the speed at maxOrthoSize; smaller
+    // sizes (zoomed in) shrink the multiplier proportionally. Perspective
+    // mode and non-ortho cameras are unaffected.
+    float ZoomPanMultiplier()
+    {
+        Camera c = cam != null ? cam : Camera.main;
+        if (c == null || !c.orthographic || maxOrthoSize <= 0f)
+            return 1f;
+        return c.orthographicSize / maxOrthoSize;
     }
 
     Vector3 ApplyDragPan(Vector3 position)
