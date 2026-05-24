@@ -29,7 +29,7 @@ using UnityEngine.InputSystem;
 public class CameraPan : MonoBehaviour
 {
     [Tooltip("World units per second when fully held.")]
-    public float panSpeed = 50f;
+    public float panSpeed = 12f;
 
     [Tooltip("Optional grid used to clamp the camera to the map's footprint.")]
     public HexGrid grid;
@@ -58,13 +58,13 @@ public class CameraPan : MonoBehaviour
 
     [Tooltip("World units of orthographicSize per unit of scroll input " +
              "(orthographic mode). Positive scroll zooms in (shrinks size).")]
-    public float orthoZoomSpeed = 3f;
+    public float orthoZoomSpeed = 0.5f;
 
     [Tooltip("Minimum orthographicSize when zoomed all the way in (orthographic mode).")]
-    public float minOrthoSize = 4f;
+    public float minOrthoSize = 2f;
 
     [Tooltip("Maximum orthographicSize when zoomed all the way out (orthographic mode).")]
-    public float maxOrthoSize = 5f;
+    public float maxOrthoSize = 7f;
 
     // Pixel distance the cursor must travel while the left button is held
     // before we treat the gesture as a camera drag rather than a click. Kept

@@ -269,7 +269,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2634496df68644d4cae7b931a6dcbbe0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraPan
-  panSpeed: 50
+  panSpeed: 12
   grid: {fileID: 1140948792}
   clampMargin: 4
   cam: {fileID: 0}
@@ -277,9 +277,9 @@ MonoBehaviour:
   zoomSpeed: 0.05
   minZoomHeight: 6
   maxZoomHeight: 30
-  orthoZoomSpeed: 3
-  minOrthoSize: 4
-  maxOrthoSize: 5
+  orthoZoomSpeed: 0.5
+  minOrthoSize: 2
+  maxOrthoSize: 7
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
