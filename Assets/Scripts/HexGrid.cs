@@ -347,12 +347,15 @@ public class HexGrid : MonoBehaviour
     /// Breadth-first shortest path between two tiles over uniform-cost hexes.
     /// The result is the sequence of tiles to step onto, excluding the start
     /// and ending at the goal; empty if the goal equals the start or is
-    /// unreachable.
+    /// unreachable. Water tiles are impassable to land units, so the search
+    /// will never step into one and a water goal returns an empty path.
     /// </summary>
     public List<Vector2Int> FindPath(Vector2Int start, Vector2Int goal)
     {
         var path = new List<Vector2Int>();
         if (start == goal || !InBounds(start.x, start.y) || !InBounds(goal.x, goal.y))
+            return path;
+        if (!IsLand(goal.x, goal.y))
             return path;
 
         var cameFrom = new Dictionary<Vector2Int, Vector2Int> { [start] = start };
@@ -367,6 +370,8 @@ public class HexGrid : MonoBehaviour
             foreach (var next in Neighbors(current.x, current.y))
             {
                 if (cameFrom.ContainsKey(next))
+                    continue;
+                if (!IsLand(next.x, next.y))
                     continue;
                 cameFrom[next] = current;
                 frontier.Enqueue(next);
