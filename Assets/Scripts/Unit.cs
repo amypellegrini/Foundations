@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 /// <summary>
@@ -23,6 +24,9 @@ public class Unit : MonoBehaviour
 
     [Header("Identity")]
     public string unitName = "Founder";
+
+    [Tooltip("Optional world-space label that displays the unit's name below the avatar.")]
+    public TMP_Text nameLabel;
 
     [Header("Hex position (offset coordinates)")]
     public int col;
@@ -96,6 +100,20 @@ public class Unit : MonoBehaviour
     {
         MovesRemaining = movesPerTurn;
         SnapToHex();
+        SyncNameLabel();
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        SyncNameLabel();
+    }
+#endif
+
+    void SyncNameLabel()
+    {
+        if (nameLabel != null && nameLabel.text != unitName)
+            nameLabel.text = unitName;
     }
 
     void Update()
