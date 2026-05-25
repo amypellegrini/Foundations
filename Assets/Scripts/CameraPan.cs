@@ -66,6 +66,16 @@ public class CameraPan : MonoBehaviour
     [Tooltip("Maximum orthographicSize when zoomed all the way out (orthographic mode).")]
     public float maxOrthoSize = 7f;
 
+    [Header("Follow")]
+    [Tooltip("Unit the camera auto-follows. While this unit is sliding, the " +
+             "camera pans to keep it at least followEdgeTiles tiles away from " +
+             "any window edge. Set by GameController on selection.")]
+    public Unit followUnit;
+
+    [Tooltip("Minimum gap, measured in tiles, between the followed unit and " +
+             "any window edge before the camera pans to stay with it.")]
+    public float followEdgeTiles = 2f;
+
     // Pixel distance the cursor must travel while the left button is held
     // before we treat the gesture as a camera drag rather than a click. Kept
     // in sync with the matching threshold in GameController so the two
@@ -101,6 +111,10 @@ public class CameraPan : MonoBehaviour
         if (!dragging)
             position = ApplyEdgePan(position);
         position = ApplyKeyboardPan(position);
+
+        // Auto-follow runs last so it can pull the camera back if user input
+        // would otherwise let the followed unit slip past the safe-zone edge.
+        position = ApplyFollow(position);
 
         // Cylindrical grids let the camera roam unbounded in X. Re-wrap
         // it into [0, WorldWidth) at the end of each frame so coordinates
@@ -393,6 +407,73 @@ public class CameraPan : MonoBehaviour
         if (k.downArrowKey.isPressed || k.sKey.isPressed) y -= 1f;
         if (k.upArrowKey.isPressed || k.wKey.isPressed) y += 1f;
         return new Vector2(x, y);
+    }
+
+    // While the followed unit is sliding, keep its on-screen position at
+    // least followEdgeTiles tiles inside every window edge. The safe-zone
+    // check runs in screen pixels (using the unit's local tile pitch in
+    // pixels) so it stays correct under both ortho and perspective cameras
+    // at any zoom. Any deficit is converted back to a world-XZ camera shift.
+    Vector3 ApplyFollow(Vector3 position)
+    {
+        if (followUnit == null || !followUnit.IsMoving)
+            return position;
+
+        Camera c = cam != null ? cam : Camera.main;
+        if (c == null || grid == null)
+            return position;
+
+        Vector3 unitWorld = followUnit.transform.position;
+        Vector3 screen = c.WorldToScreenPoint(unitWorld);
+        if (screen.z <= 0f)
+            return position; // unit is behind the camera; nothing sensible to do
+
+        // Project the unit's east and north neighbors to measure the tile
+        // pitch in pixels at the unit's depth — this is how big "2 tiles"
+        // is in the current view.
+        Vector3 eastWorld = unitWorld + new Vector3(grid.HorizontalSpacing, 0f, 0f);
+        Vector3 northWorld = unitWorld + new Vector3(0f, 0f, grid.VerticalSpacing);
+        float tilePxX = Mathf.Abs(c.WorldToScreenPoint(eastWorld).x - screen.x);
+        float tilePxY = Mathf.Abs(c.WorldToScreenPoint(northWorld).y - screen.y);
+        if (tilePxX < 0.001f || tilePxY < 0.001f)
+            return position;
+
+        float marginX = followEdgeTiles * tilePxX;
+        float marginY = followEdgeTiles * tilePxY;
+        float wantX = Mathf.Clamp(screen.x, marginX, Screen.width - marginX);
+        float wantY = Mathf.Clamp(screen.y, marginY, Screen.height - marginY);
+
+        if (Mathf.Approximately(wantX, screen.x) && Mathf.Approximately(wantY, screen.y))
+            return position;
+
+        // Convert the pixel deficit at the unit's depth into the world-XZ
+        // shift the camera needs to apply. ScreenToWorldPoint with the
+        // unit's z gives the world point under each screen coordinate, so
+        // subtracting tells us how far the world (and inversely the camera)
+        // must move to bring the unit to the safe-zone position.
+        Vector3 currentAtUnit = c.ScreenToWorldPoint(new Vector3(screen.x, screen.y, screen.z));
+        Vector3 desiredAtUnit = c.ScreenToWorldPoint(new Vector3(wantX, wantY, screen.z));
+        Vector3 delta = currentAtUnit - desiredAtUnit;
+        delta.y = 0f;
+
+        Vector3 next = position + delta;
+        return ClampToGrid(position, next);
+    }
+
+    /// <summary>
+    /// Pans the camera so its ground look-at point lands on <paramref name="worldPos"/>.
+    /// Used on turn advance to bring the active unit back to screen center.
+    /// </summary>
+    public void CenterOn(Vector3 worldPos)
+    {
+        Vector3 p = transform.position;
+        Vector3 offset = GroundLookAtOffset(p);
+        transform.position = new Vector3(worldPos.x - offset.x, p.y, worldPos.z - offset.z);
+
+        // Drop any in-progress drag so the re-anchor logic doesn't yank the
+        // camera back to where the drag started.
+        dragging = false;
+        dragButtonHeld = false;
     }
 
     Vector3 ClampToGrid(Vector3 current, Vector3 next)

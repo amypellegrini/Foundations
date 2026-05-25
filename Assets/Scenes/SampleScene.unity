@@ -280,6 +280,8 @@ MonoBehaviour:
   orthoZoomSpeed: 0.5
   minOrthoSize: 2
   maxOrthoSize: 7
+  followUnit: {fileID: 0}
+  followEdgeTiles: 2
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -515,6 +517,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameController
   cam: {fileID: 330585545}
+  cameraPan: {fileID: 330585548}
   grid: {fileID: 1140948792}
   selectionHighlight: {fileID: 1255512125}
   pathHighlight: {fileID: 1592307854}

@@ -14,6 +14,11 @@ public class GameController : MonoBehaviour
     [Tooltip("Camera used to cast click rays. Falls back to Camera.main.")]
     public Camera cam;
 
+    [Tooltip("Camera pan controller. Used to auto-follow the selected unit " +
+             "and re-center on it at the start of each turn. If left unset, " +
+             "GameController grabs one off the cam GameObject.")]
+    public CameraPan cameraPan;
+
     [Tooltip("The hex grid units move across.")]
     public HexGrid grid;
 
@@ -47,6 +52,8 @@ public class GameController : MonoBehaviour
     {
         if (cam == null)
             cam = Camera.main;
+        if (cameraPan == null && cam != null)
+            cameraPan = cam.GetComponent<CameraPan>();
 
         // Place starting units before any Unit.Start fires (Awake on every
         // component runs before any Start), so SnapToHex picks up the
@@ -195,6 +202,8 @@ public class GameController : MonoBehaviour
     public void Select(Unit unit)
     {
         selectedUnit = unit;
+        if (cameraPan != null)
+            cameraPan.followUnit = unit;
         RefreshHighlights();
     }
 
@@ -240,6 +249,11 @@ public class GameController : MonoBehaviour
         }
         if (fogOfWar != null)
             fogOfWar.OnTurnAdvance();
+        // Snap the camera back to the active unit so the player doesn't have
+        // to scroll-hunt for it after spending the previous turn elsewhere
+        // on the map. The follow logic then keeps it in frame as it slides.
+        if (cameraPan != null && selectedUnit != null)
+            cameraPan.CenterOn(selectedUnit.transform.position);
         RefreshHighlights();
     }
 
