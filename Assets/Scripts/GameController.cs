@@ -1,13 +1,15 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Drives the turn-based movement loop:
-/// click a unit to select it, click a tile to project a path, then press
-/// Space to spend the unit's moves. When a unit is out of moves, Space
-/// advances to the next turn; units already following a path then move
-/// automatically, so one tap per turn carries them along their route.
+/// Drives the turn-based action loop. Each unit gets one action per turn —
+/// either move (along a previously-clicked path) or skip. Pressing Space
+/// commits the selected unit's action and auto-advances focus to the next
+/// unit that still has an action available; once every unit is spent, the
+/// next Space press starts the following turn. Clicking any unit at any
+/// time overrides the auto-cycle, so the player can act in any order.
 /// </summary>
 public class GameController : MonoBehaviour
 {
@@ -41,6 +43,11 @@ public class GameController : MonoBehaviour
     bool wasMoving;
     GUIStyle hudStyle;
 
+    // Stable, ordered list of all units. Built in Awake so the turn cycle
+    // has a deterministic ordering independent of Unity's object discovery
+    // order. Sorted by unitName so "Founder" precedes "Hunter".
+    readonly List<Unit> units = new List<Unit>();
+
     // Position of the cursor when the left mouse button went down. On
     // release, the click only commits if the cursor hasn't moved past the
     // shared drag threshold — that way a left-click drag handled by
@@ -61,37 +68,98 @@ public class GameController : MonoBehaviour
         if (grid != null)
         {
             grid.EnsureBuilt();
-            ScatterUnitsOnLand();
+            units.Clear();
+            units.AddRange(FindObjectsByType<Unit>(FindObjectsSortMode.None));
+            units.Sort((a, b) => string.Compare(a.unitName, b.unitName, StringComparison.Ordinal));
+            PlaceFoundingParty();
         }
     }
 
-    void ScatterUnitsOnLand()
+    void Start()
     {
-        if (grid.MapData == null) return;
+        // Open the game with the first unit selected so Space immediately
+        // acts on something instead of doing nothing until a click.
+        var first = FindNextUnit(null);
+        if (first != null)
+            Select(first);
+    }
 
-        var landTiles = new List<Vector2Int>();
+    /// <summary>
+    /// Drops the founding party — every starting unit — onto a contiguous
+    /// cluster of land tiles so they begin the game next to each other. The
+    /// first unit lands on the anchor tile; the remaining units fill in
+    /// adjacent land neighbors. Falls back gracefully if the chosen anchor
+    /// doesn't have enough adjacent land for everyone.
+    /// </summary>
+    void PlaceFoundingParty()
+    {
+        if (grid.MapData == null || units.Count == 0) return;
+
+        // Anchor candidates: land tiles with at least one land neighbor, so
+        // there's always room for a Hunter (or any second unit) next door.
+        var candidates = new List<Vector2Int>();
         for (int c = 0; c < grid.columns; c++)
-            for (int r = 0; r < grid.rows; r++)
-                if (grid.MapData[c, r] == TerrainType.Land)
-                    landTiles.Add(new Vector2Int(c, r));
-        if (landTiles.Count == 0) return;
-
-        Vector2Int firstPlaced = default;
-        bool any = false;
-        foreach (var unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
         {
-            var tile = landTiles[Random.Range(0, landTiles.Count)];
-            unit.col = tile.x;
-            unit.row = tile.y;
-            if (!any) { firstPlaced = tile; any = true; }
+            for (int r = 0; r < grid.rows; r++)
+            {
+                if (grid.MapData[c, r] != TerrainType.Land) continue;
+                foreach (var n in grid.Neighbors(c, r))
+                {
+                    if (grid.IsLand(n.x, n.y))
+                    {
+                        candidates.Add(new Vector2Int(c, r));
+                        break;
+                    }
+                }
+            }
+        }
+        if (candidates.Count == 0) return;
+
+        var anchor = candidates[UnityEngine.Random.Range(0, candidates.Count)];
+
+        // Place the first unit on the anchor.
+        units[0].col = anchor.x;
+        units[0].row = anchor.y;
+
+        // Spread the rest across adjacent land tiles. For a 2-unit founding
+        // party this just places the second unit next to the first; the
+        // loop is here so the routine still works if more starting units
+        // are added later.
+        var occupied = new HashSet<Vector2Int> { anchor };
+        for (int i = 1; i < units.Count; i++)
+        {
+            Vector2Int? spot = null;
+            foreach (var n in grid.Neighbors(units[i - 1].col, units[i - 1].row))
+            {
+                if (occupied.Contains(n)) continue;
+                if (!grid.IsLand(n.x, n.y)) continue;
+                spot = n;
+                break;
+            }
+            // If the previous unit had no free land neighbors, fall back to
+            // the anchor's neighbors.
+            if (spot == null)
+            {
+                foreach (var n in grid.Neighbors(anchor.x, anchor.y))
+                {
+                    if (occupied.Contains(n)) continue;
+                    if (!grid.IsLand(n.x, n.y)) continue;
+                    spot = n;
+                    break;
+                }
+            }
+            if (spot == null) break;
+            units[i].col = spot.Value.x;
+            units[i].row = spot.Value.y;
+            occupied.Add(spot.Value);
         }
 
-        // Slide the camera over to the first unit's tile so the player opens
-        // on their Founder instead of looking at unexplored ocean somewhere
+        // Slide the camera over to the founding party so the player opens
+        // on their units instead of looking at unexplored ocean somewhere
         // else on the map.
-        if (any && cam != null)
+        if (cam != null)
         {
-            Vector3 target = grid.HexCenter(firstPlaced.x, firstPlaced.y);
+            Vector3 target = grid.HexCenter(anchor.x, anchor.y);
             Vector3 p = cam.transform.position;
             Vector3 fwd = cam.transform.forward;
             // Compensate for a tilted camera: its ground look-at point sits
@@ -130,7 +198,14 @@ public class GameController : MonoBehaviour
     {
         bool moving = selectedUnit != null && selectedUnit.IsMoving;
         if (wasMoving && !moving)
-            RefreshHighlights();   // slide just finished — settle the overlays
+        {
+            // Slide just finished — settle the overlays, and if the unit
+            // burned through its move budget walking the queued path, hand
+            // focus to the next unit in the cycle automatically.
+            RefreshHighlights();
+            if (selectedUnit != null && selectedUnit.HasActed)
+                AdvanceFocusOrTurn();
+        }
         wasMoving = moving;
     }
 
@@ -217,23 +292,86 @@ public class GameController : MonoBehaviour
     }
 
     /// <summary>
-    /// The Space-bar action: move the selected unit along its path if it has
-    /// both moves and a path left, otherwise advance to the next turn.
+    /// The Space-bar action. Commits the selected unit's action for this
+    /// turn: walk along its queued path if one is pending, otherwise skip.
+    /// Once the unit has no further action this turn, focus jumps to the
+    /// next unit that still has one — or, if none remain, the turn rolls
+    /// over.
     /// </summary>
     public void Step()
     {
-        if (selectedUnit == null || selectedUnit.IsMoving)
+        if (units.Count == 0) return;
+
+        if (selectedUnit == null)
+        {
+            var next = FindNextUnit(null);
+            if (next != null) Select(next);
+            else AdvanceTurn();
+            return;
+        }
+
+        if (selectedUnit.IsMoving)
             return;
 
-        if (selectedUnit.MovesRemaining > 0 && selectedUnit.Path.Count > 0)
+        if (!selectedUnit.HasActed)
         {
-            selectedUnit.MoveAlongPath();
-            RefreshHighlights();
+            if (selectedUnit.MovesRemaining > 0 && selectedUnit.Path.Count > 0)
+            {
+                // Move action: walk along the queued path. Focus only
+                // advances once the unit has actually consumed every
+                // move; partial moves keep the unit selected so the
+                // player can click another destination and continue.
+                // Hand-off itself lands in LateUpdate once the slide
+                // finishes, which keeps the camera follow tidy.
+                selectedUnit.MoveAlongPath();
+                RefreshHighlights();
+            }
+            else
+            {
+                // Skip action: this unit forfeits its remaining moves and
+                // focus advances to the next unit in the cycle.
+                selectedUnit.Skip();
+                AdvanceFocusOrTurn();
+            }
         }
         else
         {
-            AdvanceTurn();
+            // Already spent — Space cycles past it.
+            AdvanceFocusOrTurn();
         }
+    }
+
+    /// <summary>
+    /// Move the player to the next unit with an action available, or roll
+    /// the turn over if every unit has acted.
+    /// </summary>
+    void AdvanceFocusOrTurn()
+    {
+        var next = FindNextUnit(selectedUnit);
+        if (next != null)
+            Select(next);
+        else
+            AdvanceTurn();
+    }
+
+    /// <summary>
+    /// The next unit after <paramref name="after"/> in cycle order that
+    /// still has an action available this turn, or null if every unit is
+    /// spent. Wraps around the list and skips the starting unit itself.
+    /// </summary>
+    Unit FindNextUnit(Unit after)
+    {
+        if (units.Count == 0) return null;
+        int startIndex = after != null ? units.IndexOf(after) : -1;
+        for (int step = 1; step <= units.Count; step++)
+        {
+            int idx = (startIndex + step) % units.Count;
+            if (idx < 0) idx += units.Count;
+            var u = units[idx];
+            if (u != null && !u.HasActed)
+                return u;
+        }
+        return null;
     }
 
     void AdvanceTurn()
@@ -241,19 +379,27 @@ public class GameController : MonoBehaviour
         Turn++;
         // A new turn refills moves; a unit already following a path spends
         // them straight away, so the player taps once per turn, not twice.
-        foreach (var unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
+        foreach (var unit in units)
         {
+            if (unit == null) continue;
             unit.RefillMoves();
             if (unit.Path.Count > 0)
                 unit.MoveAlongPath();
         }
         if (fogOfWar != null)
             fogOfWar.OnTurnAdvance();
-        // Snap the camera back to the active unit so the player doesn't have
-        // to scroll-hunt for it after spending the previous turn elsewhere
-        // on the map. The follow logic then keeps it in frame as it slides.
-        if (cameraPan != null && selectedUnit != null)
-            cameraPan.CenterOn(selectedUnit.transform.position);
+        // Hand focus to the first unit with an action available this turn.
+        var next = FindNextUnit(null);
+        if (next != null)
+        {
+            Select(next);
+            // Snap the camera back to the active unit so the player doesn't
+            // have to scroll-hunt for it after spending the previous turn
+            // elsewhere on the map. The follow logic then keeps it in frame
+            // as it slides.
+            if (cameraPan != null)
+                cameraPan.CenterOn(next.transform.position);
+        }
         RefreshHighlights();
     }
 
@@ -313,19 +459,24 @@ public class GameController : MonoBehaviour
             normal = { textColor = Color.white },
         };
 
-        GUILayout.BeginArea(new Rect(16, 12, 560, 180));
+        GUILayout.BeginArea(new Rect(16, 12, 640, 220));
         GUILayout.Label($"Turn {Turn}", hudStyle);
-        if (selectedUnit != null)
+
+        // Compact per-unit status line so the player can see who has acted
+        // and who is still waiting. Selected unit gets a leading marker.
+        foreach (var unit in units)
         {
-            GUILayout.Label(
-                $"{selectedUnit.unitName} — moves {selectedUnit.MovesRemaining}/{selectedUnit.movesPerTurn}"
-                + $"  ·  path: {selectedUnit.Path.Count} tile(s)", hudStyle);
+            if (unit == null) continue;
+            string marker = unit == selectedUnit ? "▶ " : "   ";
+            string status = unit.HasActed ? "done" :
+                $"{unit.MovesRemaining}/{unit.movesPerTurn} moves" +
+                (unit.Path.Count > 0 ? $" · path {unit.Path.Count}" : "");
+            GUILayout.Label($"{marker}{unit.unitName} — {status}", hudStyle);
         }
-        else
-        {
-            GUILayout.Label("Click the unit to select it.", hudStyle);
-        }
-        GUILayout.Label("Click a tile to set a destination  ·  Space to move / advance turn", hudStyle);
+
+        if (selectedUnit == null)
+            GUILayout.Label("Click a unit to select it.", hudStyle);
+        GUILayout.Label("Click a tile to set a destination  ·  Space to move / skip / next turn", hudStyle);
         GUILayout.EndArea();
     }
 }

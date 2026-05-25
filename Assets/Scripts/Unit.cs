@@ -48,6 +48,15 @@ public class Unit : MonoBehaviour
     /// <summary>Tiles still available to spend this turn.</summary>
     public int MovesRemaining { get; private set; }
 
+    /// <summary>
+    /// True once this unit has spent its action for the current turn — either
+    /// by exhausting its move budget, or by being explicitly skipped. Cleared
+    /// each turn by <see cref="RefillMoves"/>.
+    /// </summary>
+    public bool HasActed => MovesRemaining == 0 || skipped;
+
+    bool skipped;
+
     /// <summary>Current hex as offset coordinates.</summary>
     public Vector2Int Coord => new Vector2Int(col, row);
 
@@ -197,6 +206,16 @@ public class Unit : MonoBehaviour
     public void RefillMoves()
     {
         MovesRemaining = movesPerTurn;
+        skipped = false;
+    }
+
+    /// <summary>
+    /// Forfeits any remaining moves for this turn. The unit is treated as
+    /// having spent its action and the turn cycle should move past it.
+    /// </summary>
+    public void Skip()
+    {
+        skipped = true;
     }
 
     void SyncDisplay()
