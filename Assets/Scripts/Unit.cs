@@ -101,6 +101,21 @@ public class Unit : MonoBehaviour
         MovesRemaining = movesPerTurn;
         SnapToHex();
         SyncNameLabel();
+        // Default to hidden — GameController turns the label on for the
+        // currently focused unit only.
+        if (nameLabel != null)
+            nameLabel.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Toggles the focus-only overlays for this unit. Right now that's just
+    /// the in-world name label, which should only appear under the focused
+    /// unit so the map stays uncluttered when many units are visible.
+    /// </summary>
+    public void SetSelected(bool selected)
+    {
+        if (nameLabel != null)
+            nameLabel.gameObject.SetActive(selected);
     }
 
 #if UNITY_EDITOR

@@ -309,7 +309,11 @@ public class GameController : MonoBehaviour
     /// <summary>Selects a unit and shows its overlays.</summary>
     public void Select(Unit unit)
     {
+        if (selectedUnit != null && selectedUnit != unit)
+            selectedUnit.SetSelected(false);
         selectedUnit = unit;
+        if (unit != null)
+            unit.SetSelected(true);
         if (cameraPan != null)
             cameraPan.followUnit = unit;
         RefreshHighlights();
