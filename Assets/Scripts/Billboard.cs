@@ -19,7 +19,7 @@ public class Billboard : MonoBehaviour
             return;
 
         Vector3 forward = cam.orthographic
-            ? -cam.transform.forward
+            ? cam.transform.forward
             : (transform.position - cam.transform.position);
 
         if (forward.sqrMagnitude < 0.0001f)
