@@ -41,6 +41,13 @@ public class GameController : MonoBehaviour
 
     Unit selectedUnit;
     bool wasMoving;
+    // True when AdvanceTurn fired with auto-walks still in flight, so the
+    // turn-restart focus reset must be deferred until those slides finish.
+    bool pendingTurnRestart;
+    // Units whose queued paths still need to be auto-walked this turn.
+    // Drained one entry at a time by LateUpdate so the slides play
+    // sequentially — never two units sliding at once.
+    readonly Queue<Unit> pendingAutoWalks = new Queue<Unit>();
     GUIStyle hudStyle;
 
     // Stable, ordered list of all units. Built in Awake so the turn cycle
@@ -196,17 +203,43 @@ public class GameController : MonoBehaviour
 
     void LateUpdate()
     {
-        bool moving = selectedUnit != null && selectedUnit.IsMoving;
+        // Watch every unit. Focus transitions must wait for any slide to
+        // finish, and the auto-walk queue runs strictly one unit at a time.
+        bool moving = AnyUnitMoving();
         if (wasMoving && !moving)
-        {
-            // Slide just finished — settle the overlays, and if the unit
-            // burned through its move budget walking the queued path, hand
-            // focus to the next unit in the cycle automatically.
             RefreshHighlights();
-            if (selectedUnit != null && selectedUnit.HasActed)
+
+        // All focus transitions are gated on "nothing is animating" so the
+        // selection outline, camera follow, and HUD don't jump to the next
+        // unit while the previous one is still mid-slide.
+        if (!moving)
+        {
+            // Drain queued auto-walks first. Each pop starts its own slide
+            // and re-enters LateUpdate's wait loop until completion, so
+            // units never animate simultaneously.
+            if (pendingAutoWalks.Count > 0)
+            {
+                StartNextAutoWalk();
+            }
+            else if (pendingTurnRestart)
+            {
+                pendingTurnRestart = false;
+                ApplyTurnRestart();
+            }
+            else if (selectedUnit != null && selectedUnit.HasActed)
+            {
                 AdvanceFocusOrTurn();
+            }
         }
+
         wasMoving = moving;
+    }
+
+    bool AnyUnitMoving()
+    {
+        foreach (var u in units)
+            if (u != null && u.IsMoving) return true;
+        return false;
     }
 
     // --- Input ----------------------------------------------------------
@@ -310,7 +343,10 @@ public class GameController : MonoBehaviour
             return;
         }
 
-        if (selectedUnit.IsMoving)
+        // Block every action — move, skip, cycle — while anything is
+        // sliding, so the player can't kick off a second move on top of
+        // an in-flight one or an auto-walk in the queue.
+        if (AnyUnitMoving())
             return;
 
         if (!selectedUnit.HasActed)
@@ -377,30 +413,76 @@ public class GameController : MonoBehaviour
     void AdvanceTurn()
     {
         Turn++;
-        // A new turn refills moves; a unit already following a path spends
-        // them straight away, so the player taps once per turn, not twice.
+        // Refill moves for everyone. Units that still hold a path from the
+        // previous turn don't walk it straight away — instead each one is
+        // queued for a sequential auto-walk so the slides play one unit at
+        // a time, in their own focus cycle.
         foreach (var unit in units)
         {
             if (unit == null) continue;
             unit.RefillMoves();
-            if (unit.Path.Count > 0)
-                unit.MoveAlongPath();
         }
         if (fogOfWar != null)
             fogOfWar.OnTurnAdvance();
-        // Hand focus to the first unit with an action available this turn.
-        var next = FindNextUnit(null);
-        if (next != null)
+
+        pendingAutoWalks.Clear();
+        foreach (var unit in units)
         {
-            Select(next);
-            // Snap the camera back to the active unit so the player doesn't
-            // have to scroll-hunt for it after spending the previous turn
-            // elsewhere on the map. The follow logic then keeps it in frame
-            // as it slides.
-            if (cameraPan != null)
-                cameraPan.CenterOn(next.transform.position);
+            if (unit != null && unit.Path.Count > 0)
+                pendingAutoWalks.Enqueue(unit);
+        }
+
+        if (pendingAutoWalks.Count > 0)
+        {
+            // Defer the post-walk focus reset until the whole queue has
+            // drained. Start the first one now; LateUpdate kicks off the
+            // rest in order, each only after the previous slide ends.
+            pendingTurnRestart = true;
+            StartNextAutoWalk();
+        }
+        else
+        {
+            ApplyTurnRestart();
         }
         RefreshHighlights();
+    }
+
+    /// <summary>
+    /// Pop the next queued auto-walk, focus on the unit, and kick off its
+    /// slide. Skips entries whose pending path has since been drained.
+    /// </summary>
+    void StartNextAutoWalk()
+    {
+        while (pendingAutoWalks.Count > 0)
+        {
+            var unit = pendingAutoWalks.Dequeue();
+            if (unit == null) continue;
+            if (unit.Path.Count == 0 || unit.MovesRemaining == 0) continue;
+
+            // Focus moves to the unit that's about to walk so the player
+            // can see what's happening — camera centers and the HUD
+            // marker tracks it.
+            Select(unit);
+            if (cameraPan != null)
+                cameraPan.CenterOn(unit.transform.position);
+            unit.MoveAlongPath();
+            RefreshHighlights();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Restart the per-turn cycle on the first un-acted unit, re-centering
+    /// the camera so the player doesn't scroll-hunt after spending the
+    /// previous turn elsewhere on the map.
+    /// </summary>
+    void ApplyTurnRestart()
+    {
+        var first = FindNextUnit(null);
+        if (first == null) return;
+        Select(first);
+        if (cameraPan != null)
+            cameraPan.CenterOn(first.transform.position);
     }
 
     // --- Overlays --------------------------------------------------------
