@@ -33,10 +33,14 @@ public class HexGrid : MonoBehaviour
     public bool wrap = true;
 
     [Header("Appearance")]
-    [Tooltip("Material for the tiles. This must be a project material asset, not " +
+    [Tooltip("Material for land tiles. This must be a project material asset, not " +
              "one created at runtime — referencing an asset is what keeps its " +
              "shader (and variants) included in player builds.")]
     public Material tileMaterial;
+
+    [Tooltip("Material for water tiles. Only used when a MapGenerator is attached " +
+             "and produces water tiles; otherwise every tile renders with tileMaterial.")]
+    public Material waterMaterial;
 
     [Tooltip("World units that map to one full repeat of the tile texture. " +
              "Smaller = more visible texture detail per hex. Has no effect on " +
@@ -57,18 +61,58 @@ public class HexGrid : MonoBehaviour
 
     HexChunk[,] chunks;
     Transform chunksRoot;
+    bool isBuilt;
+
+    /// <summary>
+    /// The static terrain layer (land/water per tile). Null when no
+    /// <see cref="MapGenerator"/> is attached, in which case every tile is
+    /// treated as land. Generated during <see cref="EnsureBuilt"/>.
+    /// </summary>
+    public MapData MapData { get; private set; }
 
     void Awake()
     {
         // Build in Awake (not Start) so collaborators that read the chunk
         // layout in Start — HexDecorator, FogOfWar — see a fully built grid.
+        EnsureBuilt();
+    }
+
+    /// <summary>
+    /// Idempotent build entry point. Generates the map (if a
+    /// <see cref="MapGenerator"/> is attached) and constructs the chunk
+    /// hierarchy. Safe for collaborators to call from their own Awake when
+    /// they need to read map data before HexGrid's Awake has run.
+    /// </summary>
+    public void EnsureBuilt()
+    {
+        if (isBuilt) return;
+        isBuilt = true;
+
         if (wrap && (columns & 1) != 0)
         {
             Debug.LogWarning(
                 $"HexGrid: wrap=true requires an even column count; got {columns}. " +
                 "Odd/even neighbor parity will not match across the seam.", this);
         }
+
+        var generator = GetComponent<MapGenerator>();
+        if (generator != null)
+            MapData = generator.Generate(columns, rows, HorizontalSpacing, VerticalSpacing, wrap);
+
         BuildChunks();
+    }
+
+    /// <summary>
+    /// True if the tile at the given offset coordinates is land. Returns true
+    /// for any in-bounds tile when there is no <see cref="MapData"/> — i.e.,
+    /// the all-land default used when no <see cref="MapGenerator"/> is
+    /// attached. Out-of-bounds tiles return false.
+    /// </summary>
+    public bool IsLand(int col, int row)
+    {
+        if (!InBounds(col, row)) return false;
+        if (MapData == null) return true;
+        return MapData[col, row] == TerrainType.Land;
     }
 
     // --- Public query API: lets units, overlays, culling sit on the grid -
@@ -384,14 +428,30 @@ public class HexGrid : MonoBehaviour
         var go = new GameObject($"Chunk_{chunkCol:00}_{chunkRow:00}");
         go.transform.SetParent(chunksRoot, worldPositionStays: false);
 
-        Mesh mesh = BuildTerrainMesh(colStart, colEnd, rowStart, rowEnd);
-        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        Mesh landMesh = BuildTerrainMesh(colStart, colEnd, rowStart, rowEnd, TerrainType.Land);
+        go.AddComponent<MeshFilter>().sharedMesh = landMesh;
         var mr = go.AddComponent<MeshRenderer>();
         if (tileMaterial != null) mr.sharedMaterial = tileMaterial;
 
         var chunk = go.AddComponent<HexChunk>();
         Bounds bounds = ChunkWorldBounds(colStart, colEnd, rowStart, rowEnd);
         chunk.Initialize(chunkCol, chunkRow, colStart, colEnd, rowStart, rowEnd, bounds, this);
+
+        // Water rides as a sibling mesh under the same chunk GameObject. This
+        // keeps it inside the chunk's frustum-culling unit (one SetActive
+        // toggles both layers) and means ghost copies for E-W wrap inherit
+        // the water layer for free, the same way they inherit borders.
+        if (MapData != null && waterMaterial != null)
+        {
+            Mesh waterMesh = BuildTerrainMesh(colStart, colEnd, rowStart, rowEnd, TerrainType.Water);
+            if (waterMesh.vertexCount > 0)
+            {
+                var wgo = new GameObject("Water");
+                wgo.transform.SetParent(go.transform, worldPositionStays: false);
+                wgo.AddComponent<MeshFilter>().sharedMesh = waterMesh;
+                wgo.AddComponent<MeshRenderer>().sharedMaterial = waterMaterial;
+            }
+        }
 
         if (borderMaterial != null)
         {
@@ -412,7 +472,8 @@ public class HexGrid : MonoBehaviour
         return chunk;
     }
 
-    Mesh BuildTerrainMesh(int colStart, int colEnd, int rowStart, int rowEnd)
+    Mesh BuildTerrainMesh(int colStart, int colEnd, int rowStart, int rowEnd,
+                          TerrainType terrain)
     {
         var verts = new List<Vector3>();
         var tris = new List<int>();
@@ -426,6 +487,12 @@ public class HexGrid : MonoBehaviour
         {
             for (int row = rowStart; row < rowEnd; row++)
             {
+                // When MapData is null every tile is land (the default
+                // before a generator is wired in), so the water pass emits
+                // nothing and the land pass emits everything.
+                TerrainType tileTerrain = MapData != null ? MapData[col, row] : TerrainType.Land;
+                if (tileTerrain != terrain) continue;
+
                 float x = col * horizSpacing;
                 float z = row * vertSpacing + (col % 2 == 1 ? vertSpacing * 0.5f : 0f);
                 AddHex(verts, tris, uvs, new Vector3(x, 0f, z), hexSize, uvScale);
@@ -434,15 +501,18 @@ public class HexGrid : MonoBehaviour
 
         var mesh = new Mesh
         {
-            name = $"ChunkTerrain_{colStart}_{rowStart}",
+            name = $"Chunk{terrain}_{colStart}_{rowStart}",
             indexFormat = UnityEngine.Rendering.IndexFormat.UInt32,
         };
-        mesh.SetVertices(verts);
-        mesh.SetTriangles(tris, 0);
-        mesh.SetUVs(0, uvs);
-        mesh.RecalculateNormals();
-        mesh.RecalculateTangents();
-        mesh.RecalculateBounds();
+        if (verts.Count > 0)
+        {
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.SetUVs(0, uvs);
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            mesh.RecalculateBounds();
+        }
         return mesh;
     }
 
@@ -461,6 +531,10 @@ public class HexGrid : MonoBehaviour
         {
             for (int row = chunk.RowStart; row < chunk.RowEnd; row++)
             {
+                // Borders are a land-only overlay: hex grid lines drawn on
+                // the water make the ocean look like a tiled board.
+                if (MapData != null && MapData[col, row] != TerrainType.Land)
+                    continue;
                 if (include != null && !include(col, row))
                     continue;
                 float x = col * horizSpacing;

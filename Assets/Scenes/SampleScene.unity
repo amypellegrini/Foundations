@@ -653,6 +653,7 @@ GameObject:
   - component: {fileID: 1140948792}
   - component: {fileID: 1140948796}
   - component: {fileID: 1140948797}
+  - component: {fileID: 1140948798}
   m_Layer: 0
   m_Name: HexGrid
   m_TagString: Untagged
@@ -678,6 +679,7 @@ MonoBehaviour:
   chunkSize: 16
   wrap: 1
   tileMaterial: {fileID: 2100000, guid: dad63164a82728d4cae733e94f5d574f, type: 2}
+  waterMaterial: {fileID: 2100000, guid: fc8935c468d9744c0a06773140fce6df, type: 2}
   textureWorldScale: 6
   borderMaterial: {fileID: 2100000, guid: 0a682203646d04c4d833d248e4c8f6c3, type: 2}
   borderWidth: 0.04
@@ -789,6 +791,25 @@ MonoBehaviour:
   padding: 24
   fallbackRadius: 50
   ghostWarmupFrames: 2
+--- !u!114 &1140948798
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1140948791}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08f87e24619c3460ba150e8c321090e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MapGenerator
+  noiseScale: 80
+  octaves: 4
+  persistence: 0.5
+  seaLevel: 0.5
+  polarFalloff: 0.6
+  polarBand: 0.18
+  seed: 0
 --- !u!1 &1255512124
 GameObject:
   m_ObjectHideFlags: 0

@@ -69,7 +69,8 @@ public class HexDecorator : MonoBehaviour
 
             for (int col = chunk.ColStart; col < chunk.ColEnd; col++)
                 for (int row = chunk.RowStart; row < chunk.RowEnd; row++)
-                    ScatterOnHex(grid, col, row, parent);
+                    if (grid.IsLand(col, row))
+                        ScatterOnHex(grid, col, row, parent);
         }
     }
 

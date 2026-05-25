@@ -47,6 +47,58 @@ public class GameController : MonoBehaviour
     {
         if (cam == null)
             cam = Camera.main;
+
+        // Place starting units before any Unit.Start fires (Awake on every
+        // component runs before any Start), so SnapToHex picks up the
+        // generated land tile instead of the scene's authored col/row.
+        if (grid != null)
+        {
+            grid.EnsureBuilt();
+            ScatterUnitsOnLand();
+        }
+    }
+
+    void ScatterUnitsOnLand()
+    {
+        if (grid.MapData == null) return;
+
+        var landTiles = new List<Vector2Int>();
+        for (int c = 0; c < grid.columns; c++)
+            for (int r = 0; r < grid.rows; r++)
+                if (grid.MapData[c, r] == TerrainType.Land)
+                    landTiles.Add(new Vector2Int(c, r));
+        if (landTiles.Count == 0) return;
+
+        Vector2Int firstPlaced = default;
+        bool any = false;
+        foreach (var unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
+        {
+            var tile = landTiles[Random.Range(0, landTiles.Count)];
+            unit.col = tile.x;
+            unit.row = tile.y;
+            if (!any) { firstPlaced = tile; any = true; }
+        }
+
+        // Slide the camera over to the first unit's tile so the player opens
+        // on their Founder instead of looking at unexplored ocean somewhere
+        // else on the map.
+        if (any && cam != null)
+        {
+            Vector3 target = grid.HexCenter(firstPlaced.x, firstPlaced.y);
+            Vector3 p = cam.transform.position;
+            Vector3 fwd = cam.transform.forward;
+            // Compensate for a tilted camera: its ground look-at point sits
+            // offset from its transform position along forward. Without this,
+            // a tilted-down camera lands so its look-at is far from the unit.
+            float tx = 0f, tz = 0f;
+            if (p.y > 0f && fwd.y < -0.0001f)
+            {
+                float t = -p.y / fwd.y;
+                tx = fwd.x * t;
+                tz = fwd.z * t;
+            }
+            cam.transform.position = new Vector3(target.x - tx, p.y, target.z - tz);
+        }
     }
 
     void Update()
