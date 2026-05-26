@@ -208,7 +208,8 @@ public class GameController : MonoBehaviour
         // Watch every unit. Focus transitions must wait for any slide to
         // finish, and the auto-walk queue runs strictly one unit at a time.
         bool moving = AnyUnitMoving();
-        if (wasMoving && !moving)
+        bool justStoppedMoving = wasMoving && !moving;
+        if (justStoppedMoving)
             RefreshHighlights();
 
         // All focus transitions are gated on "nothing is animating" so the
@@ -228,15 +229,18 @@ public class GameController : MonoBehaviour
                 pendingTurnRestart = false;
                 ApplyTurnRestart();
             }
-            else if (selectedUnit != null && selectedUnit.HasActed)
+            else if (justStoppedMoving && selectedUnit != null && selectedUnit.HasActed)
             {
                 // Auto-cycle focus to the next un-acted unit so the
-                // player can keep acting without clicking. At end of
-                // turn (every unit spent) we deliberately do NOT roll
-                // the turn over — that requires an explicit Space
-                // press, giving the player a chance to reset or
-                // cancel queued trajectories before the next turn
-                // auto-walks them.
+                // player can keep acting without clicking. Gated on
+                // the "just stopped moving" edge so a manual Tab or
+                // click onto a spent unit isn't immediately reverted
+                // — only a unit that just finished its action hands
+                // off focus. At end of turn (every unit spent) we
+                // deliberately do NOT roll the turn over — that
+                // requires an explicit Space press, giving the
+                // player a chance to reset or cancel queued
+                // trajectories before the next turn auto-walks them.
                 AdvanceFocusWithinTurn();
             }
         }
