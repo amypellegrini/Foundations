@@ -229,7 +229,14 @@ public class GameController : MonoBehaviour
             }
             else if (selectedUnit != null && selectedUnit.HasActed)
             {
-                AdvanceFocusOrTurn();
+                // Auto-cycle focus to the next un-acted unit so the
+                // player can keep acting without clicking. At end of
+                // turn (every unit spent) we deliberately do NOT roll
+                // the turn over — that requires an explicit Space
+                // press, giving the player a chance to reset or
+                // cancel queued trajectories before the next turn
+                // auto-walks them.
+                AdvanceFocusWithinTurn();
             }
         }
 
@@ -429,7 +436,8 @@ public class GameController : MonoBehaviour
 
     /// <summary>
     /// Move the player to the next unit with an action available, or roll
-    /// the turn over if every unit has acted.
+    /// the turn over if every unit has acted. Called from <see cref="Step"/>
+    /// (Space press), so the rollover is always player-driven.
     /// </summary>
     void AdvanceFocusOrTurn()
     {
@@ -438,6 +446,19 @@ public class GameController : MonoBehaviour
             Select(next);
         else
             AdvanceTurn();
+    }
+
+    /// <summary>
+    /// Like <see cref="AdvanceFocusOrTurn"/> but stops at the end of the
+    /// turn instead of rolling over. Used by the LateUpdate auto-cycle so
+    /// the turn only advances on an explicit Space press — leaving room
+    /// for the player to clear or rewrite queued paths before next turn.
+    /// </summary>
+    void AdvanceFocusWithinTurn()
+    {
+        var next = FindNextUnit(selectedUnit);
+        if (next != null)
+            Select(next);
     }
 
     /// <summary>
