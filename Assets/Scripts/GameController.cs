@@ -187,6 +187,7 @@ public class GameController : MonoBehaviour
     {
         HandleClick();
         HandleSpace();
+        HandleTab();
 
         // While a unit slides, glue its outline to the tile it is passing over.
         if (selectedUnit != null && selectedUnit.IsMoving &&
@@ -304,6 +305,13 @@ public class GameController : MonoBehaviour
             Step();
     }
 
+    void HandleTab()
+    {
+        var keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.tabKey.wasPressedThisFrame)
+            CycleFocus();
+    }
+
     // --- Game actions (also called by verification tooling) -------------
 
     /// <summary>Selects a unit and shows its overlays.</summary>
@@ -379,6 +387,44 @@ public class GameController : MonoBehaviour
             // Already spent — Space cycles past it.
             AdvanceFocusOrTurn();
         }
+    }
+
+    /// <summary>
+    /// Cycle focus to the next unit in the ordered list regardless of
+    /// whether it has acted this turn — TAB is a pure review/selection
+    /// helper, separate from the Space action loop. Blocks while anything
+    /// is animating so a cycle can't interrupt a slide.
+    /// </summary>
+    public void CycleFocus()
+    {
+        if (units.Count == 0) return;
+        if (AnyUnitMoving()) return;
+
+        var next = FindNextAnyUnit(selectedUnit);
+        if (next == null || next == selectedUnit) return;
+
+        Select(next);
+        if (cameraPan != null)
+            cameraPan.CenterOn(next.transform.position);
+    }
+
+    /// <summary>
+    /// The next non-null unit after <paramref name="after"/> in the ordered
+    /// list, wrapping around. Unlike <see cref="FindNextUnit"/> this ignores
+    /// <c>HasActed</c> so TAB can revisit any unit at any time.
+    /// </summary>
+    Unit FindNextAnyUnit(Unit after)
+    {
+        if (units.Count == 0) return null;
+        int startIndex = after != null ? units.IndexOf(after) : -1;
+        for (int step = 1; step <= units.Count; step++)
+        {
+            int idx = (startIndex + step) % units.Count;
+            if (idx < 0) idx += units.Count;
+            var u = units[idx];
+            if (u != null) return u;
+        }
+        return null;
     }
 
     /// <summary>
@@ -562,7 +608,7 @@ public class GameController : MonoBehaviour
 
         if (selectedUnit == null)
             GUILayout.Label("Click a unit to select it.", hudStyle);
-        GUILayout.Label("Click a tile to set a destination  ·  Space to move / skip / next turn", hudStyle);
+        GUILayout.Label("Click a tile to set a destination  ·  Space to move / skip / next turn  ·  Tab to cycle units", hudStyle);
         GUILayout.EndArea();
     }
 }
