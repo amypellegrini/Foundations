@@ -269,11 +269,33 @@ public class FogOfWar : MonoBehaviour
         if (!changed)
             return;
 
+        StateRevision++;
         RebuildOverlayMeshes();
         grid.RebuildBorders((c, r) => state[c, r] == TileVisibility.Visible);
         if (decorator != null)
             decorator.ApplyVisibility((c, r) => state[c, r] == TileVisibility.Visible);
     }
+
+    /// <summary>
+    /// The current visibility tier of a single tile. Returns
+    /// <see cref="TileVisibility.Unknown"/> before the overlay has
+    /// initialized or for out-of-bounds coordinates — callers (e.g. the
+    /// minimap) treat that as "not discovered yet".
+    /// </summary>
+    public TileVisibility GetVisibility(int col, int row)
+    {
+        if (state == null || grid == null) return TileVisibility.Unknown;
+        if (col < 0 || col >= grid.columns || row < 0 || row >= grid.rows)
+            return TileVisibility.Unknown;
+        return state[col, row];
+    }
+
+    /// <summary>
+    /// Monotonically increases whenever the per-tile state changes — the
+    /// minimap reads this to know when to repaint its texture without
+    /// having to mirror the visibility array itself.
+    /// </summary>
+    public int StateRevision { get; private set; }
 
     /// <summary>
     /// Advance the freshness clock by one tick: every Explored tile loses
@@ -309,7 +331,10 @@ public class FogOfWar : MonoBehaviour
         // cheap (only affected chunks emit any geometry) and keeps the code
         // simple.
         if (changed)
+        {
+            StateRevision++;
             RebuildOverlayMeshes();
+        }
     }
 
     void RebuildOverlayMeshes()

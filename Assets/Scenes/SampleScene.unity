@@ -1039,6 +1039,7 @@ GameObject:
   - component: {fileID: 1140948796}
   - component: {fileID: 1140948797}
   - component: {fileID: 1140948798}
+  - component: {fileID: 1140948799}
   m_Layer: 0
   m_Name: HexGrid
   m_TagString: Untagged
@@ -1195,6 +1196,31 @@ MonoBehaviour:
   polarFalloff: 0.6
   polarBand: 0.18
   seed: 42
+--- !u!114 &1140948799
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1140948791}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1893167236863434385b92e00682ee58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Minimap
+  grid: {fileID: 1140948792}
+  fogOfWar: {fileID: 1140948796}
+  size: {x: 240, y: 140}
+  margin: 16
+  frameWidth: 2
+  unknownColor: {r: 0.04, g: 0.04, b: 0.06, a: 0.85}
+  visibleLand: {r: 0.45, g: 0.7, b: 0.3, a: 1}
+  visibleWater: {r: 0.2, g: 0.4, b: 0.65, a: 1}
+  exploredLand: {r: 0.27, g: 0.4, b: 0.2, a: 1}
+  exploredWater: {r: 0.14, g: 0.24, b: 0.38, a: 1}
+  frameColor: {r: 0, g: 0, b: 0, a: 0.85}
+  unitColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  unitDotSize: 6
 --- !u!1 &1255512124
 GameObject:
   m_ObjectHideFlags: 0
