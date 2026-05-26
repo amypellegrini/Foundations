@@ -49,6 +49,7 @@ public class GameController : MonoBehaviour
     // sequentially — never two units sliding at once.
     readonly Queue<Unit> pendingAutoWalks = new Queue<Unit>();
     GUIStyle hudStyle;
+    GUIStyle hudCornerStyle;
 
     // Stable, ordered list of all units. Built in Awake so the turn cycle
     // has a deterministic ordering independent of Unity's object discovery
@@ -631,5 +632,59 @@ public class GameController : MonoBehaviour
             GUILayout.Label("Click a unit to select it.", hudStyle);
         GUILayout.Label("Click a tile to set a destination  ·  Space to move / skip / next turn  ·  Tab to cycle units", hudStyle);
         GUILayout.EndArea();
+
+        DrawTurnStateIndicator();
+    }
+
+    void DrawTurnStateIndicator()
+    {
+        string text = GetTurnStateIndicator();
+        if (string.IsNullOrEmpty(text)) return;
+
+        hudCornerStyle ??= new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 22,
+            alignment = TextAnchor.LowerRight,
+            normal = { textColor = Color.white },
+        };
+
+        const float w = 480f, h = 120f, margin = 16f;
+        var rect = new Rect(
+            Screen.width - w - margin,
+            Screen.height - h - margin,
+            w, h);
+        GUI.Label(rect, text, hudCornerStyle);
+    }
+
+    string GetTurnStateIndicator()
+    {
+        if (units.Count == 0) return null;
+        // Mid-slide the unit's MovesRemaining is already decremented but the
+        // player can't act yet — suppress the indicator instead of flashing a
+        // stale or premature state.
+        if (AnyUnitMoving()) return null;
+
+        if (AllUnitsActed())
+            return "press space for next turn";
+
+        if (selectedUnit != null && !selectedUnit.HasActed)
+        {
+            int m = selectedUnit.MovesRemaining;
+            string moves = m == 1 ? "1 move left" : $"{m} moves left";
+            // Space only triggers a skip when there's no queued path; with a
+            // path queued, space commits the move. Show the skip prompt only
+            // when it actually applies.
+            string skip = selectedUnit.Path.Count == 0 ? "\npress space to skip" : "";
+            return $"{selectedUnit.unitName}\n{moves}{skip}";
+        }
+
+        return null;
+    }
+
+    bool AllUnitsActed()
+    {
+        foreach (var u in units)
+            if (u != null && !u.HasActed) return false;
+        return true;
     }
 }
