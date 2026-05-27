@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -21,7 +22,7 @@ public class Minimap : MonoBehaviour
 
     [Header("Layout")]
     [Tooltip("On-screen size of the minimap in pixels. Aspect is preserved by " +
-             "fitting the map's column/row ratio inside this box.")]
+             "fitting the discovered region's column/row ratio inside this box.")]
     public Vector2 size = new Vector2(240f, 140f);
 
     [Tooltip("Pixel gap between the minimap and the lower-left corner of the screen.")]
@@ -29,6 +30,12 @@ public class Minimap : MonoBehaviour
 
     [Tooltip("Width of the dark frame drawn around the minimap, in pixels.")]
     public float frameWidth = 2f;
+
+    [Tooltip("Tiles of breathing room drawn around the discovered region. " +
+             "These pad tiles still render as Unknown so the player sees a " +
+             "thin frontier ring around their explored area.")]
+    [Min(0)]
+    public int padding = 1;
 
     [Header("Tile colours")]
     [Tooltip("Unknown tiles — never seen, or fully decayed back from Explored.")]
@@ -62,6 +69,13 @@ public class Minimap : MonoBehaviour
     int lastRevision = -1;
     int lastColumns;
     int lastRows;
+    // Bounding box of the discovered (Visible + Explored) region, in tile
+    // coordinates. Width counts columns starting at colStart and walking east
+    // with wrap; row range is always clamped to [0, rows).
+    int bboxColStart;
+    int bboxColCount;
+    int bboxRowStart;
+    int bboxRowCount;
 
     void OnEnable()
     {
@@ -80,16 +94,16 @@ public class Minimap : MonoBehaviour
         if (Event.current.type != EventType.Repaint) return;
         if (grid == null) return;
 
-        EnsureTextures();
+        EnsureAuxTextures();
         RebuildIfDirty();
-        if (texture == null) return;
+        if (texture == null || bboxColCount == 0 || bboxRowCount == 0) return;
 
-        // Fit the minimap rect to the map's aspect inside the configured size.
-        float mapAspect = (float)grid.columns / Mathf.Max(1, grid.rows);
+        // Fit the minimap rect to the bbox's aspect inside the configured size.
+        float bboxAspect = (float)bboxColCount / bboxRowCount;
         float w = size.x;
         float h = size.y;
-        if (w / h > mapAspect) w = h * mapAspect;
-        else h = w / mapAspect;
+        if (w / h > bboxAspect) w = h * bboxAspect;
+        else h = w / bboxAspect;
 
         float x = margin;
         float y = Screen.height - h - margin;
@@ -108,27 +122,8 @@ public class Minimap : MonoBehaviour
             DrawUnits(rect);
     }
 
-    void EnsureTextures()
+    void EnsureAuxTextures()
     {
-        if (grid.columns != lastColumns || grid.rows != lastRows)
-        {
-            if (texture != null) Destroy(texture);
-            texture = null;
-            lastColumns = grid.columns;
-            lastRows = grid.rows;
-        }
-
-        if (texture == null)
-        {
-            texture = new Texture2D(grid.columns, grid.rows, TextureFormat.RGBA32, false)
-            {
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp,
-                name = "MinimapTexture",
-            };
-            lastRevision = -1;
-        }
-
         if (unitTex == null)
         {
             unitTex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "MinimapUnitTex" };
@@ -147,26 +142,150 @@ public class Minimap : MonoBehaviour
     void RebuildIfDirty()
     {
         int rev = fogOfWar != null ? fogOfWar.StateRevision : 0;
+        bool gridChanged = grid.columns != lastColumns || grid.rows != lastRows;
         // When there's no fog-of-war source the texture only needs to be
         // painted once — every tile resolves to its raw terrain colour. We
         // still take that path when rev == 0 (overlay not yet initialized).
-        if (rev == lastRevision && lastRevision != -1)
+        if (!gridChanged && rev == lastRevision && lastRevision != -1)
             return;
         lastRevision = rev;
+        lastColumns = grid.columns;
+        lastRows = grid.rows;
+
+        ComputeBoundingBox();
+        if (bboxColCount == 0 || bboxRowCount == 0)
+        {
+            if (texture != null) { Destroy(texture); texture = null; }
+            return;
+        }
+
+        if (texture == null || texture.width != bboxColCount || texture.height != bboxRowCount)
+        {
+            if (texture != null) Destroy(texture);
+            texture = new Texture2D(bboxColCount, bboxRowCount, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp,
+                name = "MinimapTexture",
+            };
+        }
 
         var pixels = texture.GetPixels32();
-        int cols = grid.columns;
-        int rows = grid.rows;
-        for (int r = 0; r < rows; r++)
+        for (int y = 0; y < bboxRowCount; y++)
         {
-            int rowOffset = r * cols;
-            for (int c = 0; c < cols; c++)
+            int row = bboxRowStart + y;
+            int rowOffset = y * bboxColCount;
+            for (int x = 0; x < bboxColCount; x++)
             {
-                pixels[rowOffset + c] = (Color32)ColorFor(c, r);
+                int col = grid.WrapColumn(bboxColStart + x);
+                pixels[rowOffset + x] = (Color32)ColorFor(col, row);
             }
         }
         texture.SetPixels32(pixels);
         texture.Apply(updateMipmaps: false);
+    }
+
+    /// <summary>
+    /// Computes the tightest bounding box around tiles the player has at
+    /// least Explored, expanded by <see cref="padding"/> tiles. On a
+    /// wrapping grid the bbox is allowed to cross the E–W seam: the
+    /// algorithm finds the largest circular gap in the set of discovered
+    /// columns and covers everything except that gap.
+    /// </summary>
+    void ComputeBoundingBox()
+    {
+        int cols = grid.columns;
+        int rows = grid.rows;
+
+        // Gather row min/max and the set of discovered columns in one pass.
+        int rowMin = int.MaxValue, rowMax = int.MinValue;
+        var discoveredCols = new HashSet<int>();
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+            {
+                if (IsDiscovered(c, r))
+                {
+                    if (r < rowMin) rowMin = r;
+                    if (r > rowMax) rowMax = r;
+                    discoveredCols.Add(c);
+                }
+            }
+        }
+
+        if (discoveredCols.Count == 0)
+        {
+            // Nothing discovered yet — render nothing. (Game opens with the
+            // founder's sight radius already revealing tiles, so this branch
+            // is only hit on the very first frames before fog initializes.)
+            bboxColStart = 0;
+            bboxColCount = 0;
+            bboxRowStart = 0;
+            bboxRowCount = 0;
+            return;
+        }
+
+        // Rows: clamp [rowMin-padding, rowMax+padding] to the world.
+        int padRowMin = Mathf.Max(0, rowMin - padding);
+        int padRowMax = Mathf.Min(rows - 1, rowMax + padding);
+        bboxRowStart = padRowMin;
+        bboxRowCount = padRowMax - padRowMin + 1;
+
+        // Columns: find the wrap-aware column range covering every discovered
+        // column. Without wrap it's just [min, max].
+        var sorted = new List<int>(discoveredCols);
+        sorted.Sort();
+
+        int colStart, colCount;
+        if (!grid.wrap)
+        {
+            colStart = sorted[0];
+            colCount = sorted[sorted.Count - 1] - sorted[0] + 1;
+        }
+        else
+        {
+            // Find the biggest gap between consecutive discovered columns,
+            // including the wrap-around gap between the last and first
+            // entries. The bbox covers the world minus that gap.
+            int n = sorted.Count;
+            int bestGap = (cols - sorted[n - 1]) + sorted[0] - 1; // wrap gap
+            int bestStart = sorted[0]; // start right after the wrap gap
+            for (int i = 0; i < n - 1; i++)
+            {
+                int gap = sorted[i + 1] - sorted[i] - 1;
+                if (gap > bestGap)
+                {
+                    bestGap = gap;
+                    bestStart = sorted[i + 1];
+                }
+            }
+            colStart = bestStart;
+            colCount = cols - bestGap;
+        }
+
+        // Apply column padding. With wrap, pad both sides freely (capped at
+        // the world width). Without wrap, clamp to [0, cols).
+        if (grid.wrap)
+        {
+            colCount = Mathf.Min(cols, colCount + padding * 2);
+            colStart = grid.WrapColumn(colStart - padding);
+        }
+        else
+        {
+            int padColStart = Mathf.Max(0, colStart - padding);
+            int padColEnd = Mathf.Min(cols - 1, colStart + colCount - 1 + padding);
+            colStart = padColStart;
+            colCount = padColEnd - padColStart + 1;
+        }
+
+        bboxColStart = colStart;
+        bboxColCount = colCount;
+    }
+
+    bool IsDiscovered(int col, int row)
+    {
+        if (fogOfWar == null) return true;
+        return fogOfWar.GetVisibility(col, row) != TileVisibility.Unknown;
     }
 
     Color ColorFor(int col, int row)
@@ -186,8 +305,8 @@ public class Minimap : MonoBehaviour
         var units = FindObjectsByType<Unit>(FindObjectsSortMode.None);
         if (units == null || units.Length == 0) return;
 
-        float cellW = rect.width / Mathf.Max(1, grid.columns);
-        float cellH = rect.height / Mathf.Max(1, grid.rows);
+        float cellW = rect.width / Mathf.Max(1, bboxColCount);
+        float cellH = rect.height / Mathf.Max(1, bboxRowCount);
         float halfDot = unitDotSize * 0.5f;
 
         var prev = GUI.color;
@@ -209,8 +328,22 @@ public class Minimap : MonoBehaviour
             if (fogOfWar != null && fogOfWar.GetVisibility(col, r) == TileVisibility.Unknown)
                 continue;
 
-            float px = rect.x + (col + 0.5f) * cellW;
-            float py = rect.y + rect.height - (r + 0.5f) * cellH;
+            // Map the unit's tile into the bbox's local column space, taking
+            // the wrap into account so a unit on the seam still lands inside
+            // a bbox that crosses the seam.
+            int localCol = col - bboxColStart;
+            if (grid.wrap)
+            {
+                int cols = grid.columns;
+                localCol = ((localCol % cols) + cols) % cols;
+            }
+            if (localCol < 0 || localCol >= bboxColCount) continue;
+
+            int localRow = r - bboxRowStart;
+            if (localRow < 0 || localRow >= bboxRowCount) continue;
+
+            float px = rect.x + (localCol + 0.5f) * cellW;
+            float py = rect.y + rect.height - (localRow + 0.5f) * cellH;
             GUI.DrawTexture(new Rect(px - halfDot, py - halfDot, unitDotSize, unitDotSize), unitTex);
         }
         GUI.color = prev;
