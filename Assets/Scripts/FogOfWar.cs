@@ -46,9 +46,11 @@ public class FogOfWar : MonoBehaviour
     [Range(0f, 1f)]
     public float exploredAlpha = 0.55f;
 
-    [Tooltip("Overlay alpha drawn on Unknown tiles (and the asymptote of decaying Explored).")]
+    [Tooltip("Overlay alpha drawn on Unknown tiles (and the asymptote of decaying Explored). " +
+             "Unknown is meant to be fully opaque — at 0.95 the underlying sea/land hues still " +
+             "bleed through enough to distinguish biomes the player has never seen.")]
     [Range(0f, 1f)]
-    public float unknownAlpha = 0.95f;
+    public float unknownAlpha = 1f;
 
     [Header("Geometry")]
     [Tooltip("World units the fog overlay sits above the ground plane. " +
