@@ -174,6 +174,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unit
   grid: {fileID: 1140948792}
   unitName: Hunter
+  canFoundCity: 0
   nameLabel: {fileID: 1955665205}
   col: 5
   row: 4
@@ -626,6 +627,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Unit
   grid: {fileID: 1140948792}
   unitName: Founder
+  canFoundCity: 1
   nameLabel: {fileID: 854831579}
   col: 4
   row: 4
@@ -709,6 +711,8 @@ MonoBehaviour:
   selectionHighlight: {fileID: 1255512125}
   pathHighlight: {fileID: 1592307854}
   fogOfWar: {fileID: 1140948796}
+  cityTileHeight: 0.06
+  cityLabelDrop: 1.1
 --- !u!4 &845079104
 Transform:
   m_ObjectHideFlags: 0

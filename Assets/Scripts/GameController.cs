@@ -33,6 +33,15 @@ public class GameController : MonoBehaviour
     [Tooltip("Fog-of-war system; ticked once per turn so Explored memory decays.")]
     public FogOfWar fogOfWar;
 
+    [Header("Cities")]
+    [Tooltip("How far above the tile plane the magenta city marker sits. Keep " +
+             "above the fog overlay height so a founded city stays visible.")]
+    public float cityTileHeight = 0.06f;
+
+    [Tooltip("How far south of the tile center the city name caption sits, in " +
+             "world units, so it reads as a label below the marker.")]
+    public float cityLabelDrop = 1.1f;
+
     /// <summary>Current turn number, starting at 1.</summary>
     public int Turn { get; private set; } = 1;
 
@@ -55,6 +64,17 @@ public class GameController : MonoBehaviour
     // has a deterministic ordering independent of Unity's object discovery
     // order. Sorted by unitName so "Founder" precedes "Hunter".
     readonly List<Unit> units = new List<Unit>();
+
+    // Cities founded so far. Currently only additive — held so later systems
+    // (vision, production, the minimap) can iterate over them.
+    readonly List<City> cities = new List<City>();
+
+    // Found-city dialog state. While open, world input is suppressed and a
+    // modal name prompt is drawn over the scene.
+    bool foundDialogOpen;
+    string foundCityName = "Rome";
+    Unit foundDialogUnit;
+    bool focusNameField;
 
     // Position of the cursor when the left mouse button went down. On
     // release, the click only commits if the cursor hasn't moved past the
@@ -186,9 +206,14 @@ public class GameController : MonoBehaviour
 
     void Update()
     {
+        // The found-city dialog is modal — it owns input until dismissed.
+        if (foundDialogOpen)
+            return;
+
         HandleClick();
         HandleSpace();
         HandleTab();
+        HandleFoundCity();
 
         // While a unit slides, glue its outline to the tile it is passing over.
         if (selectedUnit != null && selectedUnit.IsMoving &&
@@ -324,6 +349,13 @@ public class GameController : MonoBehaviour
             CycleFocus();
     }
 
+    void HandleFoundCity()
+    {
+        var keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.bKey.wasPressedThisFrame)
+            OpenFoundCityDialog();
+    }
+
     // --- Game actions (also called by verification tooling) -------------
 
     /// <summary>Selects a unit and shows its overlays.</summary>
@@ -346,6 +378,75 @@ public class GameController : MonoBehaviour
             return;
         selectedUnit.SetPath(grid.FindPath(selectedUnit.Coord, target));
         RefreshHighlights();
+    }
+
+    // --- City founding ---------------------------------------------------
+
+    /// <summary>
+    /// Whether <paramref name="unit"/> can found a city right now: it must be
+    /// a Founder with at least one move left this turn. Founding spends an
+    /// action point, so a spent unit can't settle until next turn.
+    /// </summary>
+    public bool CanFoundCity(Unit unit)
+        => unit != null && unit.canFoundCity && !unit.HasActed && unit.MovesRemaining >= 1;
+
+    /// <summary>
+    /// Opens the modal name prompt for the selected Founder, if it's eligible
+    /// and nothing is mid-slide. Pre-fills the default city name.
+    /// </summary>
+    public void OpenFoundCityDialog()
+    {
+        if (AnyUnitMoving()) return;
+        if (!CanFoundCity(selectedUnit)) return;
+
+        foundDialogUnit = selectedUnit;
+        foundCityName = "Rome";
+        foundDialogOpen = true;
+        focusNameField = true;
+    }
+
+    void CancelFoundCityDialog()
+    {
+        foundDialogOpen = false;
+        foundDialogUnit = null;
+    }
+
+    /// <summary>
+    /// Confirms the dialog: builds the city on the Founder's tile, consumes
+    /// the Founder, and hands focus to the next unit that can still act.
+    /// </summary>
+    void ConfirmFoundCity()
+    {
+        Unit founder = foundDialogUnit;
+        string name = string.IsNullOrWhiteSpace(foundCityName) ? "Rome" : foundCityName.Trim();
+        foundDialogOpen = false;
+        foundDialogUnit = null;
+
+        // Re-check eligibility — the Founder could have been lost between
+        // opening the dialog and confirming it.
+        if (!CanFoundCity(founder)) return;
+
+        var go = new GameObject($"City ({name})");
+        var city = go.AddComponent<City>();
+        city.Initialize(grid, founder.col, founder.row, name,
+            grid.tileMaterial, founder.nameLabel, cityTileHeight, cityLabelDrop);
+        cities.Add(city);
+
+        // Consume the Founder: it becomes the city.
+        units.Remove(founder);
+        if (cameraPan != null && cameraPan.followUnit == founder)
+            cameraPan.followUnit = null;
+        if (selectedUnit == founder)
+            selectedUnit = null;
+        Destroy(founder.gameObject);
+
+        // Hand off to whatever can still act (e.g. an escorting Hunter); fall
+        // back to any remaining unit so the player keeps a selection.
+        var next = FindNextUnit(null) ?? FindNextAnyUnit(null);
+        if (next != null)
+            Select(next);
+        else
+            RefreshHighlights();
     }
 
     /// <summary>
@@ -637,11 +738,30 @@ public class GameController : MonoBehaviour
         GUILayout.Label("Click a tile to set a destination  ·  Space to move / skip / next turn  ·  Tab to cycle units", hudStyle);
         GUILayout.EndArea();
 
-        DrawTurnStateIndicator();
+        if (foundDialogOpen)
+            DrawFoundCityDialog();
+        else
+            DrawBottomRightHud();
     }
 
-    void DrawTurnStateIndicator()
+    void DrawBottomRightHud()
     {
+        const float margin = 16f;
+        float bottom = Screen.height - margin;
+
+        // Found City affordance: a button at the very bottom-right whenever
+        // the selected Founder can settle. Mirrors the B-key shortcut.
+        if (CanFoundCity(selectedUnit) && !AnyUnitMoving())
+        {
+            const float bw = 220f, bh = 44f;
+            var brect = new Rect(Screen.width - bw - margin, bottom - bh, bw, bh);
+            if (GUI.Button(brect, "Found City (B)"))
+                OpenFoundCityDialog();
+            bottom -= bh + 8f;
+        }
+
+        // Turn-state prompt, stacked just above the button (or at the bottom
+        // when no button is showing).
         string text = GetTurnStateIndicator();
         if (string.IsNullOrEmpty(text)) return;
 
@@ -652,12 +772,70 @@ public class GameController : MonoBehaviour
             normal = { textColor = Color.white },
         };
 
-        const float w = 480f, h = 120f, margin = 16f;
-        var rect = new Rect(
-            Screen.width - w - margin,
-            Screen.height - h - margin,
-            w, h);
+        const float w = 480f, h = 120f;
+        var rect = new Rect(Screen.width - w - margin, bottom - h, w, h);
         GUI.Label(rect, text, hudCornerStyle);
+    }
+
+    void DrawFoundCityDialog()
+    {
+        // Dim the scene behind the modal so it reads as a focused prompt and
+        // no stray world-HUD buttons sit on top.
+        GUI.color = new Color(0f, 0f, 0f, 0.5f);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = Color.white;
+
+        hudStyle ??= new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 20,
+            normal = { textColor = Color.white },
+        };
+
+        const float w = 380f, h = 210f;
+        var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
+        GUI.Box(rect, GUIContent.none);
+
+        // Enter confirms, Esc cancels — handled before the controls consume
+        // the keystroke as text input.
+        var e = Event.current;
+        if (e.type == EventType.KeyDown)
+        {
+            if (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter)
+            {
+                ConfirmFoundCity();
+                e.Use();
+                return;
+            }
+            if (e.keyCode == KeyCode.Escape)
+            {
+                CancelFoundCityDialog();
+                e.Use();
+                return;
+            }
+        }
+
+        GUILayout.BeginArea(new Rect(rect.x + 20, rect.y + 16, rect.width - 40, rect.height - 32));
+        GUILayout.Label("Found City", hudStyle);
+        GUILayout.Space(10);
+        GUILayout.Label("City name", hudStyle);
+
+        GUI.SetNextControlName("CityNameField");
+        foundCityName = GUILayout.TextField(foundCityName, 32, GUILayout.Height(28));
+        if (focusNameField)
+        {
+            GUI.FocusControl("CityNameField");
+            focusNameField = false;
+        }
+
+        GUILayout.Space(14);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Confirm", GUILayout.Height(32)))
+            ConfirmFoundCity();
+        GUILayout.Space(10);
+        if (GUILayout.Button("Cancel", GUILayout.Height(32)))
+            CancelFoundCityDialog();
+        GUILayout.EndHorizontal();
+        GUILayout.EndArea();
     }
 
     string GetTurnStateIndicator()

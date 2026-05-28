@@ -25,6 +25,10 @@ public class Unit : MonoBehaviour
     [Header("Identity")]
     public string unitName = "Founder";
 
+    [Tooltip("Whether this unit can found a city. Only the Founder should have " +
+             "this set; founding consumes the unit.")]
+    public bool canFoundCity;
+
     [Tooltip("Optional world-space label that displays the unit's name below the avatar.")]
     public TMP_Text nameLabel;
 
