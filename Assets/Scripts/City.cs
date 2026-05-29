@@ -21,6 +21,15 @@ public class City : MonoBehaviour
     public int row;
     public string cityName;
 
+    /// <summary>The population a city is founded with.</summary>
+    public const int StartingPopulation = 100;
+
+    /// <summary>
+    /// Current number of inhabitants. A freshly founded city starts at
+    /// <see cref="StartingPopulation"/>; growth systems come later (SPEC.md §3.2).
+    /// </summary>
+    public int population = StartingPopulation;
+
     /// <summary>The city's hex as offset coordinates.</summary>
     public Vector2Int Coord => new Vector2Int(col, row);
 

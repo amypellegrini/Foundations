@@ -76,6 +76,13 @@ public class GameController : MonoBehaviour
     Unit foundDialogUnit;
     bool focusNameField;
 
+    // City status panel. Set when a founded city's tile is clicked; a popup
+    // then shows the city's name and population. While open, world clicks are
+    // suppressed (as with the found-city dialog) so a stray click doesn't also
+    // issue a move order — a click outside the panel just dismisses it.
+    City selectedCity;
+    GUIStyle cityTitleStyle;
+
     // Position of the cursor when the left mouse button went down. On
     // release, the click only commits if the cursor hasn't moved past the
     // shared drag threshold — that way a left-click drag handled by
@@ -210,6 +217,14 @@ public class GameController : MonoBehaviour
         if (foundDialogOpen)
             return;
 
+        // The city status panel is a popup — while it's open it owns clicks so
+        // they can't fall through to a move order. Click-outside / Esc closes it.
+        if (selectedCity != null)
+        {
+            HandleCityPanelInput();
+            return;
+        }
+
         HandleClick();
         HandleSpace();
         HandleTab();
@@ -325,14 +340,61 @@ public class GameController : MonoBehaviour
             }
         }
 
-        // Otherwise a click on the ground sets the selected unit's destination.
+        // Otherwise resolve the click to a tile on the ground plane.
         var ground = new Plane(Vector3.up, grid.transform.position);
         if (ground.Raycast(ray, out float dist))
         {
             Vector3 point = ray.GetPoint(dist);
-            if (selectedUnit != null && grid.TryWorldToHex(point, out int c, out int r))
+            if (!grid.TryWorldToHex(point, out int c, out int r))
+                return;
+
+            // A click on a city's tile opens its status panel — this takes
+            // priority over a move order so the player can inspect a city.
+            var city = CityAt(c, r);
+            if (city != null)
+            {
+                selectedCity = city;
+                return;
+            }
+
+            if (selectedUnit != null)
                 OrderMoveTo(new Vector2Int(c, r));
         }
+    }
+
+    /// <summary>The founded city occupying the given tile, or null if none.</summary>
+    City CityAt(int col, int row)
+    {
+        foreach (var c in cities)
+            if (c != null && c.col == col && c.row == row)
+                return c;
+        return null;
+    }
+
+    /// <summary>
+    /// Input while the city status panel is open: Esc, or a left-click outside
+    /// the panel, dismisses it. Clicks on the panel itself are left to OnGUI so
+    /// its Close button still works.
+    /// </summary>
+    void HandleCityPanelInput()
+    {
+        var keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+        {
+            selectedCity = null;
+            return;
+        }
+
+        var mouse = Mouse.current;
+        if (mouse == null || !mouse.leftButton.wasReleasedThisFrame)
+            return;
+
+        // Input System reports the cursor with a bottom-left origin; GUI rects
+        // use a top-left origin, so flip Y before the hit-test.
+        Vector2 p = mouse.position.ReadValue();
+        var gui = new Vector2(p.x, Screen.height - p.y);
+        if (!CityPanelRect().Contains(gui))
+            selectedCity = null;
     }
 
     void HandleSpace()
@@ -740,8 +802,45 @@ public class GameController : MonoBehaviour
 
         if (foundDialogOpen)
             DrawFoundCityDialog();
+        else if (selectedCity != null)
+            DrawCityPanel();
         else
             DrawBottomRightHud();
+    }
+
+    /// <summary>The screen-space rect of the city status popup. Shared by the
+    /// renderer and the click-outside hit-test so the two stay in lockstep.</summary>
+    static Rect CityPanelRect()
+    {
+        const float w = 320f, h = 170f;
+        return new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
+    }
+
+    void DrawCityPanel()
+    {
+        var rect = CityPanelRect();
+        GUI.Box(rect, GUIContent.none);
+
+        hudStyle ??= new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 20,
+            normal = { textColor = Color.white },
+        };
+        cityTitleStyle ??= new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 28,
+            fontStyle = FontStyle.Bold,
+            normal = { textColor = Color.white },
+        };
+
+        GUILayout.BeginArea(new Rect(rect.x + 20, rect.y + 16, rect.width - 40, rect.height - 32));
+        GUILayout.Label(selectedCity.cityName, cityTitleStyle);
+        GUILayout.Space(10);
+        GUILayout.Label($"Population: {selectedCity.population}", hudStyle);
+        GUILayout.FlexibleSpace();
+        if (GUILayout.Button("Close", GUILayout.Height(30)))
+            selectedCity = null;
+        GUILayout.EndArea();
     }
 
     void DrawBottomRightHud()
