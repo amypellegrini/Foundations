@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
@@ -23,6 +24,12 @@ public class City : MonoBehaviour
 
     /// <summary>The population a city is founded with.</summary>
     public const int StartingPopulation = 100;
+
+    /// <summary>
+    /// How many tiles out from the city center its territory reaches. A
+    /// boundary ring is drawn around every tile within this hex distance.
+    /// </summary>
+    public const int TerritoryRadius = 3;
 
     /// <summary>
     /// Current number of inhabitants. A freshly founded city starts at
@@ -51,6 +58,7 @@ public class City : MonoBehaviour
         this.cityName = cityName;
 
         BuildTile(tileMaterial, tileLift);
+        BuildTerritory(tileMaterial, tileLift);
         BuildLabel(labelTemplate, tileLift, labelDrop);
         SyncDisplay();
     }
@@ -93,6 +101,128 @@ public class City : MonoBehaviour
         mpb.SetColor("_BaseColor", Color.magenta);
         mpb.SetColor("_Color", Color.magenta);
         mr.SetPropertyBlock(mpb);
+    }
+
+    /// <summary>
+    /// Outlines the city's territory: a ring drawn along the outer edges of
+    /// every tile within <see cref="TerritoryRadius"/> hexes of the center.
+    /// Reuses the land material recoloured magenta (a property block, so no
+    /// extra asset) and rides at the same height as the city marker — above
+    /// the fog overlay — so the player can always see their own city's
+    /// borders, even where the tiles beyond them are still unexplored.
+    /// </summary>
+    void BuildTerritory(Material tileMaterial, float lift)
+    {
+        Vector3 cityLocal = GridLocalCenter(col, row);
+
+        // Count how many in-radius tiles each hex edge belongs to, keyed by
+        // its (quantized) midpoint. Interior edges are shared by two tiles and
+        // counted twice; a boundary edge touches exactly one — those are the
+        // ring. Quantizing absorbs the tiny float differences between the same
+        // corner computed from two adjacent centers.
+        var edgeCount = new Dictionary<Vector2Int, int>();
+        var edgeEnds = new Dictionary<Vector2Int, (Vector3 a, Vector3 b)>();
+
+        for (int dc = -TerritoryRadius; dc <= TerritoryRadius; dc++)
+        {
+            for (int dr = -TerritoryRadius; dr <= TerritoryRadius; dr++)
+            {
+                int c = col + dc;
+                int r = row + dr;
+                if (HexGrid.HexDistance(col, row, c, r) > TerritoryRadius) continue;
+                // Clip at the poles (rows don't wrap); columns wrap freely.
+                if (!grid.InBounds(grid.WrapColumn(c), r)) continue;
+
+                Vector3 center = GridLocalCenter(c, r) - cityLocal + Vector3.up * lift;
+                Vector3[] corners = HexGrid.HexCorners(center, grid.hexSize);
+                for (int i = 0; i < 6; i++)
+                {
+                    Vector3 a = corners[i];
+                    Vector3 b = corners[(i + 1) % 6];
+                    Vector3 mid = (a + b) * 0.5f;
+                    var key = new Vector2Int(
+                        Mathf.RoundToInt(mid.x * 1000f),
+                        Mathf.RoundToInt(mid.z * 1000f));
+                    if (edgeCount.TryGetValue(key, out int n))
+                    {
+                        edgeCount[key] = n + 1;
+                    }
+                    else
+                    {
+                        edgeCount[key] = 1;
+                        edgeEnds[key] = (a, b);
+                    }
+                }
+            }
+        }
+
+        var verts = new List<Vector3>();
+        var tris = new List<int>();
+        float halfW = grid.borderWidth * 0.5f;
+        foreach (var kv in edgeCount)
+        {
+            if (kv.Value != 1) continue; // interior edge — skip
+            var (a, b) = edgeEnds[kv.Key];
+            AddRingQuad(verts, tris, a, b, halfW);
+        }
+
+        var go = new GameObject("Territory");
+        go.transform.SetParent(transform, worldPositionStays: false);
+
+        var mesh = new Mesh
+        {
+            name = "CityTerritory",
+            indexFormat = UnityEngine.Rendering.IndexFormat.UInt32,
+        };
+        mesh.SetVertices(verts);
+        mesh.SetTriangles(tris, 0);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var mr = go.AddComponent<MeshRenderer>();
+        if (tileMaterial != null)
+            mr.sharedMaterial = tileMaterial;
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+
+        var mpb = new MaterialPropertyBlock();
+        mpb.SetColor("_BaseColor", Color.magenta);
+        mpb.SetColor("_Color", Color.magenta);
+        mr.SetPropertyBlock(mpb);
+    }
+
+    /// <summary>
+    /// The grid-local center of a tile, using the same flat-top, odd-column
+    /// offset layout as <see cref="HexGrid"/> but without applying the grid's
+    /// transform — coordinates here are relative to the city's own origin.
+    /// </summary>
+    Vector3 GridLocalCenter(int c, int r)
+    {
+        float x = c * grid.HorizontalSpacing;
+        float z = r * grid.VerticalSpacing + ((c & 1) == 1 ? grid.VerticalSpacing * 0.5f : 0f);
+        return new Vector3(x, 0f, z);
+    }
+
+    // A thin quad along the edge a -> b, widened perpendicular on the XZ plane.
+    // Mirrors HexGrid's border quads so the ring reads as the same kind of line.
+    static void AddRingQuad(List<Vector3> verts, List<int> tris, Vector3 a, Vector3 b, float halfW)
+    {
+        Vector3 edge = b - a;
+        Vector3 perp = new Vector3(-edge.z, 0f, edge.x).normalized * halfW;
+
+        int baseIdx = verts.Count;
+        verts.Add(a + perp);
+        verts.Add(b + perp);
+        verts.Add(b - perp);
+        verts.Add(a - perp);
+
+        tris.Add(baseIdx);
+        tris.Add(baseIdx + 1);
+        tris.Add(baseIdx + 2);
+        tris.Add(baseIdx);
+        tris.Add(baseIdx + 2);
+        tris.Add(baseIdx + 3);
     }
 
     void BuildLabel(TMP_Text template, float tileLift, float drop)
