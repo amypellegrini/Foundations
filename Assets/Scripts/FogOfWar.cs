@@ -197,6 +197,10 @@ public class FogOfWar : MonoBehaviour
             }
             h = h * 31 + c * 1000 + r + u.sightRadius * 1_000_000;
         }
+        // Cities are static, but founding one must still retrigger a recompute
+        // so its territory clears immediately rather than on the next move.
+        foreach (var city in FindObjectsByType<City>(FindObjectsSortMode.None))
+            h = h * 31 + city.col * 1000 + city.row + City.TerritoryRadius * 1_000_000;
         return h;
     }
 
@@ -211,24 +215,13 @@ public class FogOfWar : MonoBehaviour
                 uc = wc;
                 ur = wr;
             }
-
-            // Sweep the (2r+1)-by-(2r+1) bounding square of the unit's sight
-            // radius, wrapping the column into the canonical range when wrap
-            // is on — that's what lets a unit on the seam reveal tiles on
-            // both sides. Rows clamp because the poles don't wrap.
-            int minRow = Mathf.Max(0, ur - u.sightRadius);
-            int maxRow = Mathf.Min(grid.rows - 1, ur + u.sightRadius);
-            for (int dc = -u.sightRadius; dc <= u.sightRadius; dc++)
-            {
-                int c = grid.WrapColumn(uc + dc);
-                if (!grid.wrap && (c < 0 || c >= grid.columns)) continue;
-                for (int r = minRow; r <= maxRow; r++)
-                {
-                    if (grid.Distance(uc, ur, c, r) <= u.sightRadius)
-                        nextVisible.Add(new Vector2Int(c, r));
-                }
-            }
+            RevealDisk(nextVisible, uc, ur, u.sightRadius);
         }
+
+        // A city keeps its whole territory permanently in sight: there is no
+        // fog of war within a settlement's radius.
+        foreach (var city in FindObjectsByType<City>(FindObjectsSortMode.None))
+            RevealDisk(nextVisible, city.col, city.row, City.TerritoryRadius);
 
         bool changed = force;
         for (int c = 0; c < grid.columns; c++)
@@ -276,6 +269,29 @@ public class FogOfWar : MonoBehaviour
         grid.RebuildBorders((c, r) => state[c, r] == TileVisibility.Visible);
         if (decorator != null)
             decorator.ApplyVisibility((c, r) => state[c, r] == TileVisibility.Visible);
+    }
+
+    /// <summary>
+    /// Marks every tile within <paramref name="radius"/> hexes of
+    /// (<paramref name="cc"/>, <paramref name="cr"/>) as visible. Sweeps the
+    /// (2r+1)-by-(2r+1) bounding square, wrapping the column into the
+    /// canonical range when wrap is on — that's what lets a source on the seam
+    /// reveal tiles on both sides. Rows clamp because the poles don't wrap.
+    /// </summary>
+    void RevealDisk(HashSet<Vector2Int> into, int cc, int cr, int radius)
+    {
+        int minRow = Mathf.Max(0, cr - radius);
+        int maxRow = Mathf.Min(grid.rows - 1, cr + radius);
+        for (int dc = -radius; dc <= radius; dc++)
+        {
+            int c = grid.WrapColumn(cc + dc);
+            if (!grid.wrap && (c < 0 || c >= grid.columns)) continue;
+            for (int r = minRow; r <= maxRow; r++)
+            {
+                if (grid.Distance(cc, cr, c, r) <= radius)
+                    into.Add(new Vector2Int(c, r));
+            }
+        }
     }
 
     /// <summary>
