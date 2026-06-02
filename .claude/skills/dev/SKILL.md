@@ -1,6 +1,6 @@
 ---
 name: dev
-description: Use whenever the user asks to drive a feature end-to-end — `/dev #N` picks up an existing issue, `/dev <description>` drives from scratch (BA handoff first), no arguments asks what to drive. Also responds to "dev agent" / "dev" aliases in natural-language requests. Routes to the `dev` subagent, which composes the DEV workflow (pickup → /tdd loop → commits → open-pr → /check-ci → address-pr-comments → close-issue) with eight named gates including plan-mode and AC-verification.
+description: Use whenever the user asks to drive a feature end-to-end — `/dev #N` picks up an existing issue, `/dev <description>` drives from scratch (BA handoff first), no arguments asks what to drive. Also responds to "dev agent" / "dev" aliases in natural-language requests. Routes to the `dev` subagent, which composes the DEV workflow (pickup → /tdd loop → commits → open-pr → /check-ci → address-pr-comments → close-issue) with load-bearing gates including repo-readiness (flags missing test harness / CI / issue tracker rather than silently skipping process), plan-mode, and AC-verification.
 ---
 
 # Dev orchestrator
@@ -20,7 +20,7 @@ If the argument is genuinely ambiguous (e.g. could be a description *or* a stale
 ## What the subagent owns (do not duplicate here)
 
 - The full DEV workflow composition: `pickup-issue` → repeated `/tdd` (once per AC) → `commit` / `commit-and-push` → `open-pr` → `/check-ci` → `address-pr-comments` → `close-issue`.
-- All eight gates: issue-quality, plan-mode, TDD loop, atomic-commits, review-comment classification, AC-verification, CI, post-PR CI checkpoint.
+- All load-bearing gates: repo-readiness, issue-quality, plan-mode, TDD loop, atomic-commits, review-comment classification, AC-verification, CI, post-PR CI checkpoint.
 - Graceful degradation when a required atomised skill isn't installed — surface the install command (`tw-ai <skill>`) and stop.
 - Reporting back: per-stage outcomes, gates that paused for approval, skills that ran, missing prerequisites.
 
