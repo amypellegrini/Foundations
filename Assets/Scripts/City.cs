@@ -37,10 +37,31 @@ public class City : MonoBehaviour
     /// </summary>
     public int population = StartingPopulation;
 
+    /// <summary>
+    /// How many in-radius turns must accrue for the population to grow by one.
+    /// </summary>
+    public const int TurnsPerGrowth = 3;
+
+    /// <summary>
+    /// Elapsed in-radius turns counted toward the next +1. Transient: it is
+    /// reset to 0 the moment no Hunter is in the city's radius (see
+    /// <see cref="ResetGrowth"/>), so progress is never saved across a leave.
+    /// Always in the range [0, <see cref="TurnsPerGrowth"/>).
+    /// </summary>
+    public int growthProgress;
+
+    /// <summary>
+    /// Whether growth is currently accruing — true after the most recent turn
+    /// tick found a Hunter in radius, false otherwise. Drives both the panel's
+    /// idle/active readout and the visibility of the "+1" tile indicator.
+    /// </summary>
+    public bool IsAccruing { get; private set; }
+
     /// <summary>The city's hex as offset coordinates.</summary>
     public Vector2Int Coord => new Vector2Int(col, row);
 
     TMP_Text label;
+    GameObject growthLabel;
 
     /// <summary>
     /// Builds the city's visuals on the given tile. <paramref name="tileMaterial"/>
@@ -60,7 +81,41 @@ public class City : MonoBehaviour
         BuildTile(tileMaterial, tileLift);
         BuildTerritory(tileMaterial, tileLift);
         BuildLabel(labelTemplate, tileLift, labelDrop);
+        BuildGrowthLabel(labelTemplate, tileLift, labelDrop);
         SyncDisplay();
+    }
+
+    /// <summary>
+    /// Records one turn with at least one Hunter in radius. Advances the
+    /// transient progress counter; on every <see cref="TurnsPerGrowth"/>th
+    /// accrued turn the population grows by exactly one and the counter rolls
+    /// back toward zero for the next cycle. Returns true on the turn a +1 lands.
+    /// </summary>
+    public bool AccrueGrowth()
+    {
+        IsAccruing = true;
+        growthProgress++;
+        bool grew = false;
+        if (growthProgress >= TurnsPerGrowth)
+        {
+            population++;
+            growthProgress = 0;
+            grew = true;
+        }
+        UpdateGrowthLabel();
+        return grew;
+    }
+
+    /// <summary>
+    /// Clears transient growth state — called on any turn with no Hunter in
+    /// radius. Progress toward the next +1 is discarded (not saved), so a
+    /// Hunter that re-enters later starts counting again from zero.
+    /// </summary>
+    public void ResetGrowth()
+    {
+        IsAccruing = false;
+        growthProgress = 0;
+        UpdateGrowthLabel();
     }
 
     void BuildTile(Material tileMaterial, float lift)
@@ -256,6 +311,53 @@ public class City : MonoBehaviour
         label.text = cityName;
 
         go.AddComponent<Billboard>();
+    }
+
+    /// <summary>
+    /// Builds the floating "+1" growth indicator above the city marker, reusing
+    /// the same world-space label styling as the name caption. Starts hidden;
+    /// <see cref="UpdateGrowthLabel"/> toggles it with <see cref="IsAccruing"/>.
+    /// Offset north (positive Z) so it reads above the marker, opposite the
+    /// name caption which sits to the south.
+    /// </summary>
+    void BuildGrowthLabel(TMP_Text template, float tileLift, float drop)
+    {
+        growthLabel = new GameObject("GrowthIndicator");
+        growthLabel.transform.SetParent(transform, worldPositionStays: false);
+        growthLabel.transform.localPosition = new Vector3(0f, tileLift + 0.01f, drop);
+
+        var text = growthLabel.AddComponent<TextMeshPro>();
+        if (template != null)
+        {
+            if (template.font != null) text.font = template.font;
+            if (template.fontSharedMaterial != null)
+                text.fontSharedMaterial = template.fontSharedMaterial;
+            text.fontSize = template.fontSize;
+            text.rectTransform.sizeDelta = template.rectTransform.sizeDelta;
+            text.rectTransform.pivot = template.rectTransform.pivot;
+            growthLabel.transform.localScale = template.rectTransform.localScale;
+        }
+        else
+        {
+            text.fontSize = 8f;
+            text.rectTransform.sizeDelta = new Vector2(8f, 2f);
+            growthLabel.transform.localScale = Vector3.one * 0.25f;
+        }
+        text.alignment = TextAlignmentOptions.Center;
+        text.color = Color.green;
+        text.text = "+1";
+
+        growthLabel.AddComponent<Billboard>();
+        growthLabel.SetActive(false);
+    }
+
+    /// <summary>
+    /// Shows the "+1" indicator while growth is accruing and hides it otherwise.
+    /// </summary>
+    void UpdateGrowthLabel()
+    {
+        if (growthLabel != null)
+            growthLabel.SetActive(IsAccruing);
     }
 
     void LateUpdate()
