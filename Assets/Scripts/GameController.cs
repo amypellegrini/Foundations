@@ -664,6 +664,8 @@ public class GameController : MonoBehaviour
         if (fogOfWar != null)
             fogOfWar.OnTurnAdvance();
 
+        AccrueCityGrowth();
+
         pendingAutoWalks.Clear();
         foreach (var unit in units)
         {
@@ -684,6 +686,42 @@ public class GameController : MonoBehaviour
             ApplyTurnRestart();
         }
         RefreshHighlights();
+    }
+
+    /// <summary>
+    /// Per-turn city population growth. A city accrues toward its next +1 while
+    /// at least one Hunter sits within its <see cref="City.TerritoryRadius"/>;
+    /// otherwise its transient progress resets. Presence of one or more Hunters
+    /// accrues at the same single rate (no per-Hunter stacking) — see issue #2.
+    /// </summary>
+    void AccrueCityGrowth()
+    {
+        foreach (var city in cities)
+        {
+            if (city == null) continue;
+            if (HasHunterInRadius(city))
+                city.AccrueGrowth();
+            else
+                city.ResetGrowth();
+        }
+    }
+
+    /// <summary>
+    /// True when at least one Hunter unit lies within the city's territory
+    /// radius. Hunters are identified by <c>unitName</c>, consistent with the
+    /// rest of the codebase (sorting, founder hand-off).
+    /// </summary>
+    bool HasHunterInRadius(City city)
+    {
+        foreach (var unit in units)
+        {
+            if (unit == null) continue;
+            if (unit.unitName != "Hunter") continue;
+            if (HexGrid.HexDistance(city.col, city.row, unit.col, unit.row)
+                <= City.TerritoryRadius)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -812,7 +850,7 @@ public class GameController : MonoBehaviour
     /// renderer and the click-outside hit-test so the two stay in lockstep.</summary>
     static Rect CityPanelRect()
     {
-        const float w = 320f, h = 170f;
+        const float w = 360f, h = 210f;
         return new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
     }
 
@@ -837,6 +875,11 @@ public class GameController : MonoBehaviour
         GUILayout.Label(selectedCity.cityName, cityTitleStyle);
         GUILayout.Space(10);
         GUILayout.Label($"Population: {selectedCity.population}", hudStyle);
+        GUILayout.Space(6);
+        string growth = selectedCity.IsAccruing
+            ? $"Growth: {selectedCity.growthProgress}/{City.TurnsPerGrowth} turns"
+            : "Growth: idle (no Hunter in radius)";
+        GUILayout.Label(growth, hudStyle);
         GUILayout.FlexibleSpace();
         if (GUILayout.Button("Close", GUILayout.Height(30)))
             selectedCity = null;
