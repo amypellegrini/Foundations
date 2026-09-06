@@ -11,14 +11,25 @@ compiling scripts, inspecting the hierarchy, checking how something looks —
 **use the bridge.** Do not ask the user to do editor steps by hand, and do not
 assume a change took effect without verifying through the bridge.
 
-Send commands with the wrapper script:
+Send commands with the wrapper script. Pick the one for your OS — both
+talk to the same file-based bridge (`Assets/LLM/Bridge/request.json` →
+`response.md`), so they're interchangeable.
+
+Windows (PowerShell):
 
 ```powershell
 & "C:\Users\amyvp\Foundations\unity-cmd.ps1" '{"type":"help"}' -Timeout 90
 ```
 
+macOS / Linux (bash):
+
+```bash
+/Users/amypellegrini/Documents/GitHub/Foundations/unity-cmd.sh '{"type":"help"}' -t 90
+```
+
 `{"type":"help"}` lists every command. For complex JSON, pass a file with
-`-File <path.json>` instead of an inline string.
+`-File <path.json>` (PowerShell) or `-f <path.json>` (bash) instead of an
+inline string.
 
 ### Standard workflow for a new feature
 

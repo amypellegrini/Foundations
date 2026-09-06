@@ -6,6 +6,8 @@ Foundations is a **3D game**. The primary playable scene is
 `Assets/Scenes/Foundations3D.unity`; future gameplay and assets should develop
 that scene. Hexes remain the strategic rules layer beneath the 3D world.
 
+> Detailed design specs for individual systems (units, hazards, tech tree, etc.) live in [`specs/`](./specs/README.md).
+
 ---
 
 ## 1. Design Thesis
