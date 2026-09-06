@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Hunter unit portrait, Art Nouveau / Alphonse Mucha style.
+    Flat muted palette, sepia contour lines, decorative halo, whiplash hair,
+    ornamental frame and title band. Hand-built vector source; rasterised to
+    Hunter_Mucha.png for Unity.
+  -->
+  <defs>
+    <!-- faint vertical stripes, a Mucha panel background habit -->
+    <pattern id="stripes" width="14" height="14" patternUnits="userSpaceOnUse">
+      <rect width="14" height="14" fill="#F1E4C6"/>
+      <rect x="0" y="0" width="3" height="14" fill="#E5D3AC" opacity="0.55"/>
+    </pattern>
+
+    <!-- oak leaf, base at origin, tip at (0,-90) -->
+    <path id="leaf" d="M0,0 C-12,-10 -22,-18 -18,-30 C-30,-34 -30,-50 -18,-52 C-28,-60 -24,-76 -12,-74 C-10,-84 -4,-90 0,-90 C4,-90 10,-84 12,-74 C24,-76 28,-60 18,-52 C30,-50 30,-34 18,-30 C22,-18 12,-10 0,0 Z"/>
+    <g id="oakleaf">
+      <use xlink:href="#leaf" fill="#7E8F63" stroke="#4A2E1E" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M0,-4 L0,-82" stroke="#4A2E1E" stroke-width="2" fill="none"/>
+      <path d="M0,-30 L-12,-42 M0,-30 L12,-42 M0,-52 L-11,-63 M0,-52 L11,-63" stroke="#4A2E1E" stroke-width="1.5" fill="none"/>
+    </g>
+    <g id="acorn">
+      <ellipse cx="0" cy="0" rx="12" ry="17" fill="#C79A3B" stroke="#4A2E1E" stroke-width="2.5"/>
+      <path d="M-14,-8 C-14,-22 14,-22 14,-8 C10,-3 -10,-3 -14,-8 Z" fill="#8E4A2A" stroke="#4A2E1E" stroke-width="2.5"/>
+      <path d="M-9,-13 L-9,-9 M-3,-15 L-3,-10 M3,-15 L3,-10 M9,-13 L9,-9" stroke="#4A2E1E" stroke-width="1.5"/>
+    </g>
+
+    <!-- mosaic tiles for the halo ring -->
+    <circle id="dot" r="7" fill="#C79A3B" stroke="#4A2E1E" stroke-width="1.5"/>
+    <path id="diamond" d="M0,-9 L7,0 L0,9 L-7,0 Z" fill="#F1E4C6" stroke="#4A2E1E" stroke-width="1.5"/>
+    <g id="ringTiles">
+      <use xlink:href="#dot" transform="rotate(0) translate(0 -325)"/>
+      <use xlink:href="#diamond" transform="rotate(7.5) translate(0 -325)"/>
+    </g>
+
+    <!-- corner rosette -->
+    <g id="rosette">
+      <circle r="14" fill="#B8603E" stroke="#4A2E1E" stroke-width="3"/>
+      <circle r="5" fill="#C79A3B" stroke="#4A2E1E" stroke-width="1.5"/>
+      <path d="M0,-14 L0,-26 M14,0 L26,0 M0,14 L0,26 M-14,0 L-26,0" stroke="#4A2E1E" stroke-width="3"/>
+    </g>
+
+    <clipPath id="haloClip"><circle cx="512" cy="430" r="300"/></clipPath>
+  </defs>
+
+  <!-- ===== ground and frame ===== -->
+  <rect width="1024" height="1024" fill="#F1E4C6"/>
+  <rect x="44" y="44" width="936" height="936" fill="url(#stripes)"/>
+  <rect x="20" y="20" width="984" height="984" fill="none" stroke="#4A2E1E" stroke-width="10"/>
+  <rect x="44" y="44" width="936" height="936" fill="none" stroke="#C79A3B" stroke-width="4"/>
+  <rect x="56" y="56" width="912" height="912" fill="none" stroke="#4A2E1E" stroke-width="2"/>
+
+  <!-- ===== halo ===== -->
+  <g transform="translate(512 430)">
+    <circle r="350" fill="#6A4A33" stroke="#4A2E1E" stroke-width="6"/>
+    <circle r="345" fill="none" stroke="#C79A3B" stroke-width="3"/>
+    <circle r="300" fill="#D9B56A" stroke="#4A2E1E" stroke-width="5"/>
+    <circle r="282" fill="none" stroke="#C79A3B" stroke-width="3"/>
+    <circle r="262" fill="#E3C57F" stroke="none"/>
+    <!-- mosaic ring: alternating gold dots and cream diamonds -->
+    <use xlink:href="#ringTiles" transform="rotate(0)"/>
+    <use xlink:href="#ringTiles" transform="rotate(15)"/>
+    <use xlink:href="#ringTiles" transform="rotate(30)"/>
+    <use xlink:href="#ringTiles" transform="rotate(45)"/>
+    <use xlink:href="#ringTiles" transform="rotate(60)"/>
+    <use xlink:href="#ringTiles" transform="rotate(75)"/>
+    <use xlink:href="#ringTiles" transform="rotate(90)"/>
+    <use xlink:href="#ringTiles" transform="rotate(105)"/>
+    <use xlink:href="#ringTiles" transform="rotate(120)"/>
+    <use xlink:href="#ringTiles" transform="rotate(135)"/>
+    <use xlink:href="#ringTiles" transform="rotate(150)"/>
+    <use xlink:href="#ringTiles" transform="rotate(165)"/>
+    <use xlink:href="#ringTiles" transform="rotate(180)"/>
+    <use xlink:href="#ringTiles" transform="rotate(195)"/>
+    <use xlink:href="#ringTiles" transform="rotate(210)"/>
+    <use xlink:href="#ringTiles" transform="rotate(225)"/>
+    <use xlink:href="#ringTiles" transform="rotate(240)"/>
+    <use xlink:href="#ringTiles" transform="rotate(255)"/>
+    <use xlink:href="#ringTiles" transform="rotate(270)"/>
+    <use xlink:href="#ringTiles" transform="rotate(285)"/>
+    <use xlink:href="#ringTiles" transform="rotate(300)"/>
+    <use xlink:href="#ringTiles" transform="rotate(315)"/>
+    <use xlink:href="#ringTiles" transform="rotate(330)"/>
+    <use xlink:href="#ringTiles" transform="rotate(345)"/>
+  </g>
+
+  <!-- crescent moon and stars inside the disc (Diana, the huntress) -->
+  <g clip-path="url(#haloClip)">
+    <path d="M330,250 A105,105 0 1,0 330,450 A80,80 0 1,1 330,250 Z" fill="#F4E7C8" stroke="#C79A3B" stroke-width="4"/>
+    <g fill="#F4E7C8" stroke="#C79A3B" stroke-width="2">
+      <path d="M690,230 l6,16 16,6 -16,6 -6,16 -6,-16 -16,-6 16,-6 z"/>
+      <path d="M740,300 l5,12 12,5 -12,5 -5,12 -5,-12 -12,-5 12,-5 z"/>
+      <path d="M660,320 l4,10 10,4 -10,4 -4,10 -4,-10 -10,-4 10,-4 z"/>
+    </g>
+  </g>
+
+  <!-- ===== quiver and arrows, behind the shoulder ===== -->
+  <g transform="translate(640 560) rotate(22)">
+    <g stroke="#4A2E1E" stroke-width="4" fill="none">
+      <line x1="-14" y1="-40" x2="-30" y2="-190"/>
+      <line x1="4" y1="-40" x2="4" y2="-205"/>
+      <line x1="22" y1="-40" x2="36" y2="-185"/>
+    </g>
+    <g fill="#D89A8A" stroke="#4A2E1E" stroke-width="2.5" stroke-linejoin="round">
+      <path d="M-30,-190 L-46,-160 L-24,-150 Z M-30,-190 L-14,-158 L-32,-148 Z"/>
+      <path d="M4,-205 L-12,-172 L8,-164 Z M4,-205 L20,-172 L0,-164 Z"/>
+      <path d="M36,-185 L18,-155 L40,-147 Z M36,-185 L52,-153 L34,-143 Z"/>
+    </g>
+    <path d="M-40,-50 L-24,110 Q0,130 24,110 L40,-50 Q0,-30 -40,-50 Z" fill="#8E4A2A" stroke="#4A2E1E" stroke-width="4"/>
+    <path d="M-40,-50 Q0,-30 40,-50 Q0,-70 -40,-50 Z" fill="#B9683C" stroke="#4A2E1E" stroke-width="4"/>
+    <path d="M-36,0 Q0,22 36,0 M-30,50 Q0,70 30,50" fill="none" stroke="#C79A3B" stroke-width="4"/>
+  </g>
+
+  <!-- ===== hair: back locks (outline, then colour, then light) ===== -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#4A2E1E" stroke-width="30">
+      <path d="M445,360 C360,420 300,540 340,660 C365,740 300,790 250,760 C215,740 240,690 285,705"/>
+      <path d="M582,360 C660,420 720,540 690,650 C670,730 730,790 780,760 C815,735 790,690 745,705"/>
+      <path d="M470,320 C400,330 350,420 380,520 C400,590 350,640 300,610"/>
+      <path d="M560,320 C640,330 690,430 660,530 C640,600 690,640 735,610"/>
+    </g>
+    <g stroke="#8E4A2A" stroke-width="22">
+      <path d="M445,360 C360,420 300,540 340,660 C365,740 300,790 250,760 C215,740 240,690 285,705"/>
+      <path d="M582,360 C660,420 720,540 690,650 C670,730 730,790 780,760 C815,735 790,690 745,705"/>
+      <path d="M470,320 C400,330 350,420 380,520 C400,590 350,640 300,610"/>
+      <path d="M560,320 C640,330 690,430 660,530 C640,600 690,640 735,610"/>
+    </g>
+    <g stroke="#B9683C" stroke-width="6">
+      <path d="M445,360 C360,420 300,540 340,660 C365,740 300,790 250,760"/>
+      <path d="M582,360 C660,420 720,540 690,650 C670,730 730,790 780,760"/>
+      <path d="M470,320 C400,330 350,420 380,520 C400,590 350,640 300,610"/>
+      <path d="M560,320 C640,330 690,430 660,530 C640,600 690,640 735,610"/>
+    </g>
+  </g>
+
+  <!-- ===== body: cloak ===== -->
+  <path d="M290,930 C300,730 380,620 476,565 L548,565 C644,620 724,730 734,930 Z"
+        fill="#6E7E55" stroke="#4A2E1E" stroke-width="5" stroke-linejoin="round"/>
+  <g fill="none" stroke="#4A2E1E" stroke-width="2.5" opacity="0.7">
+    <path d="M400,640 C380,720 360,820 350,930"/>
+    <path d="M624,640 C644,720 664,820 674,930"/>
+    <path d="M512,600 C500,700 505,820 512,930"/>
+  </g>
+  <!-- fur collar, scalloped -->
+  <path d="M476,565 C450,585 420,600 395,630 C385,650 400,660 412,648 C405,670 420,680 432,666 C428,690 446,696 456,678 C458,700 478,704 486,684 C500,700 520,700 536,684 C546,704 566,700 568,678 C578,696 596,690 592,666 C604,680 619,670 612,648 C624,660 639,650 629,630 C604,600 574,585 548,565 Z"
+        fill="#E9DBB7" stroke="#4A2E1E" stroke-width="4" stroke-linejoin="round"/>
+  <g transform="translate(512 640)">
+    <circle r="16" fill="#C79A3B" stroke="#4A2E1E" stroke-width="3"/>
+    <path d="M0,-11 L8,0 L0,11 L-8,0 Z" fill="#B8603E" stroke="#4A2E1E" stroke-width="2"/>
+  </g>
+
+  <!-- neck -->
+  <path d="M480,480 L478,570 Q512,590 546,570 L544,480 Z" fill="#D9AE85" stroke="#4A2E1E" stroke-width="3"/>
+
+  <!-- ===== head ===== -->
+  <path d="M438,375 C438,295 586,295 586,375 C592,435 562,505 512,510 C462,505 432,435 438,375 Z"
+        fill="#EFD3B0" stroke="#4A2E1E" stroke-width="4"/>
+  <circle cx="470" cy="420" r="18" fill="#D89A8A" opacity="0.35"/>
+  <circle cx="554" cy="420" r="18" fill="#D89A8A" opacity="0.35"/>
+  <g fill="none" stroke="#4A2E1E" stroke-width="3" stroke-linecap="round">
+    <path d="M460,370 Q484,356 508,370"/>
+    <path d="M516,370 Q540,356 564,370"/>
+    <path d="M466,393 Q486,404 504,393"/>
+    <path d="M520,393 Q538,404 558,393"/>
+    <path d="M470,394 L466,402 M480,399 L478,408 M492,399 L494,408 M534,399 L532,408 M546,399 L548,408 M554,394 L558,402" stroke-width="2"/>
+    <path d="M512,392 L506,432 Q512,440 522,434"/>
+  </g>
+  <path d="M492,458 Q512,448 532,458 Q512,474 492,458 Z" fill="#C97B6B" stroke="#4A2E1E" stroke-width="2.5"/>
+  <path d="M492,458 Q512,452 532,458" fill="none" stroke="#4A2E1E" stroke-width="2"/>
+
+  <!-- ===== hair crown ===== -->
+  <path d="M432,385 C420,300 460,246 512,246 C566,246 604,300 592,385 C590,330 560,306 512,306 C464,306 434,330 432,385 Z"
+        fill="#8E4A2A" stroke="#4A2E1E" stroke-width="4" stroke-linejoin="round"/>
+  <g fill="none" stroke="#B9683C" stroke-width="4" stroke-linecap="round">
+    <path d="M470,270 C500,258 530,258 556,270"/>
+    <path d="M452,300 C480,282 545,282 572,300"/>
+  </g>
+  <!-- laurel circlet with feather -->
+  <path d="M440,345 Q512,318 584,345" fill="none" stroke="#C79A3B" stroke-width="8" stroke-linecap="round"/>
+  <g fill="#7E8F63" stroke="#4A2E1E" stroke-width="2">
+    <ellipse cx="458" cy="338" rx="9" ry="16" transform="rotate(-60 458 338)"/>
+    <ellipse cx="482" cy="328" rx="9" ry="16" transform="rotate(-70 482 328)"/>
+    <ellipse cx="512" cy="322" rx="9" ry="16" transform="rotate(-90 512 322)"/>
+    <ellipse cx="542" cy="328" rx="9" ry="16" transform="rotate(-110 542 328)"/>
+    <ellipse cx="566" cy="338" rx="9" ry="16" transform="rotate(-120 566 338)"/>
+  </g>
+  <g transform="translate(590 340) rotate(-28)">
+    <path d="M0,0 C-10,-40 -6,-100 12,-150 C30,-100 26,-40 8,0 Z" fill="#E9DBB7" stroke="#4A2E1E" stroke-width="3"/>
+    <path d="M4,0 C6,-50 8,-100 12,-150" fill="none" stroke="#4A2E1E" stroke-width="2"/>
+    <path d="M-2,-40 L10,-50 M0,-70 L12,-80 M2,-100 L14,-110" stroke="#4A2E1E" stroke-width="1.5" fill="none"/>
+  </g>
+
+  <!-- ===== bow and bow arm ===== -->
+  <path d="M420,640 C360,640 300,610 262,585" fill="none" stroke="#4A2E1E" stroke-width="54" stroke-linecap="round"/>
+  <path d="M420,640 C360,640 300,610 262,585" fill="none" stroke="#6E7E55" stroke-width="44" stroke-linecap="round"/>
+  <path d="M262,590 C240,600 244,540 270,548" fill="none" stroke="#E9DBB7" stroke-width="22" stroke-linecap="round"/>
+  <path d="M262,590 C240,600 244,540 270,548" fill="none" stroke="#4A2E1E" stroke-width="3"/>
+  <path d="M340,900 Q205,565 356,232" fill="none" stroke="#4A2E1E" stroke-width="16" stroke-linecap="round"/>
+  <path d="M340,900 Q205,565 356,232" fill="none" stroke="#8E4A2A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M340,900 Q205,565 356,232" fill="none" stroke="#B9683C" stroke-width="3" stroke-linecap="round"/>
+  <line x1="340" y1="900" x2="356" y2="232" stroke="#4A2E1E" stroke-width="3"/>
+  <g fill="#C79A3B" stroke="#4A2E1E" stroke-width="2.5">
+    <path d="M330,896 Q340,880 352,900 Q340,915 330,896 Z"/>
+    <path d="M346,228 Q356,212 368,236 Q356,250 346,228 Z"/>
+  </g>
+  <g transform="translate(280 565)">
+    <path d="M-20,-30 C-30,-15 -30,20 -18,32 C-4,40 14,36 22,24 C28,10 26,-14 18,-28 C6,-40 -10,-40 -20,-30 Z" fill="#EFD3B0" stroke="#4A2E1E" stroke-width="3"/>
+    <path d="M-10,-24 L10,-20 M-12,-8 L12,-4 M-12,8 L10,12" fill="none" stroke="#4A2E1E" stroke-width="2"/>
+    <rect x="-8" y="-48" width="16" height="96" rx="4" fill="#C79A3B" stroke="#4A2E1E" stroke-width="2.5"/>
+  </g>
+
+  <!-- ===== oak and acorn ornaments ===== -->
+  <g>
+    <use xlink:href="#oakleaf" transform="translate(150 860) rotate(-55)"/>
+    <use xlink:href="#oakleaf" transform="translate(200 850) rotate(-20)"/>
+    <use xlink:href="#oakleaf" transform="translate(120 800) rotate(-95)"/>
+    <use xlink:href="#acorn" transform="translate(175 795)"/>
+    <use xlink:href="#acorn" transform="translate(198 812) rotate(20)"/>
+
+    <use xlink:href="#oakleaf" transform="translate(874 860) rotate(55)"/>
+    <use xlink:href="#oakleaf" transform="translate(824 850) rotate(20)"/>
+    <use xlink:href="#oakleaf" transform="translate(904 800) rotate(95)"/>
+    <use xlink:href="#acorn" transform="translate(849 795)"/>
+    <use xlink:href="#acorn" transform="translate(826 812) rotate(-20)"/>
+  </g>
+  <g fill="none" stroke="#4A2E1E" stroke-width="3" stroke-linecap="round">
+    <path d="M110,760 C90,680 140,640 150,600 C160,560 120,540 110,580"/>
+    <path d="M914,760 C934,680 884,640 874,600 C864,560 904,540 914,580"/>
+  </g>
+
+  <!-- ===== corner rosettes ===== -->
+  <use xlink:href="#rosette" transform="translate(56 56)"/>
+  <use xlink:href="#rosette" transform="translate(968 56)"/>
+  <use xlink:href="#rosette" transform="translate(56 968)"/>
+  <use xlink:href="#rosette" transform="translate(968 968)"/>
+
+  <!-- ===== title band ===== -->
+  <rect x="130" y="874" width="764" height="100" rx="8" fill="#B8603E" stroke="#4A2E1E" stroke-width="5"/>
+  <rect x="140" y="884" width="744" height="80" rx="5" fill="none" stroke="#C79A3B" stroke-width="3"/>
+  <text x="512" y="944" text-anchor="middle" font-family="Palatino Linotype, Book Antiqua, Georgia, serif"
+        font-size="60" font-weight="bold" letter-spacing="22" fill="#F1E4C6" stroke="#4A2E1E" stroke-width="1.5">HUNTER</text>
+  <g fill="#C79A3B" stroke="#4A2E1E" stroke-width="2">
+    <path d="M190,924 L204,912 L218,924 L204,936 Z"/>
+    <path d="M806,924 L820,912 L834,924 L820,936 Z"/>
+  </g>
+</svg>
