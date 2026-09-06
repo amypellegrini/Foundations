@@ -2,6 +2,10 @@
 
 *A 4X strategy game about civilizations as flows, not stocks.*
 
+Foundations is a **3D game**. The primary playable scene is
+`Assets/Scenes/Foundations3D.unity`; future gameplay and assets should develop
+that scene. Hexes remain the strategic rules layer beneath the 3D world.
+
 ---
 
 ## 1. Design Thesis
