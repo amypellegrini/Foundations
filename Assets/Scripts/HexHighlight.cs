@@ -38,11 +38,17 @@ public class HexHighlight : MonoBehaviour
         Hide();
     }
 
-    /// <summary>Snaps the outline onto the tile occupied by the given unit.</summary>
+    /// <summary>Snaps the outline onto the tile occupied by the given unit.
+    /// On a wrapping grid the outline tracks the wrap copy currently visible
+    /// to the camera, matching where the unit is actually drawn.</summary>
     public void ShowAt(Unit unit)
     {
         if (unit == null || unit.grid == null) return;
-        ShowAt(unit.grid.HexCenter(unit.col, unit.row));
+        Vector3 center = unit.grid.HexCenter(unit.col, unit.row);
+        Camera cam = Camera.main;
+        if (cam != null)
+            center = unit.grid.WrapToCamera(center, cam.transform.position.x);
+        ShowAt(center);
     }
 
     /// <summary>Snaps the outline onto the hex tile at the given world center.</summary>

@@ -1,10 +1,20 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 /// <summary>
 /// A single game unit occupying one hex tile, rendered as a sphere. Moves a
 /// fixed number of tiles per turn along a queued path; movement is animated as
 /// a slide between tile centers.
+///
+/// On a wrapping grid the unit's logical position lives in canonical world
+/// coordinates (X in [0, WorldWidth)). Its visible transform is shifted
+/// each LateUpdate to the wrap copy nearest the active camera, so the
+/// player always sees it in the world copy they're looking at. Mid-slide,
+/// the slide animation runs in continuous world coordinates that may
+/// briefly exceed the canonical range — once the path empties the canonical
+/// position is re-wrapped, and the display offset re-snaps invisibly
+/// (because the unit and the chunks it's near both shift by the same W).
 /// </summary>
 [RequireComponent(typeof(Collider))]
 public class Unit : MonoBehaviour
@@ -15,9 +25,20 @@ public class Unit : MonoBehaviour
     [Header("Identity")]
     public string unitName = "Founder";
 
+    [Tooltip("Whether this unit can found a city. Only the Founder should have " +
+             "this set; founding consumes the unit.")]
+    public bool canFoundCity;
+
+    [Tooltip("Optional world-space label that displays the unit's name below the avatar.")]
+    public TMP_Text nameLabel;
+
     [Header("Hex position (offset coordinates)")]
     public int col;
     public int row;
+
+    [Header("Vision")]
+    [Tooltip("Tiles around this unit revealed by line of sight. Founder = 2.")]
+    public int sightRadius = 2;
 
     [Header("Movement")]
     [Tooltip("Tiles this unit may move each turn.")]
@@ -29,8 +50,20 @@ public class Unit : MonoBehaviour
     [Tooltip("Slide speed in world units per second.")]
     public float moveSpeed = 4f;
 
+    [Tooltip("How fast the unit rotates to face its next waypoint, in degrees/sec.")]
+    public float turnSpeed = 720f;
+
     /// <summary>Tiles still available to spend this turn.</summary>
     public int MovesRemaining { get; private set; }
+
+    /// <summary>
+    /// True once this unit has spent its action for the current turn — either
+    /// by exhausting its move budget, or by being explicitly skipped. Cleared
+    /// each turn by <see cref="RefillMoves"/>.
+    /// </summary>
+    public bool HasActed => MovesRemaining == 0 || skipped;
+
+    bool skipped;
 
     /// <summary>Current hex as offset coordinates.</summary>
     public Vector2Int Coord => new Vector2Int(col, row);
@@ -41,29 +74,114 @@ public class Unit : MonoBehaviour
     /// <summary>Pending tiles still to be walked, ending at the destination.</summary>
     public IReadOnlyList<Vector2Int> Path => path;
 
+    /// <summary>
+    /// Canonical world position (X always in [0, WorldWidth) when wrapped).
+    /// Slide animations operate here; the visible transform is derived from
+    /// this each frame.
+    /// </summary>
+    public Vector3 CanonicalPosition => canonicalPos;
+
     readonly List<Vector2Int> path = new List<Vector2Int>();
     readonly Queue<Vector3> waypoints = new Queue<Vector3>();
+
+    // Last enqueued slide target. Used to keep wrap-aware waypoint targets
+    // continuous: a step from col W-1 to col 0 must enqueue the target at
+    // canonical X + WorldWidth (one HexSize east), not at canonical X = 0
+    // (a long slide back across the world).
+    Vector3 lastQueuedTarget;
+
+    Vector3 canonicalPos;
+
+    Animator animator;
+    static readonly int IsMovingParam = Animator.StringToHash("IsMoving");
+
+    void Awake()
+    {
+        MovesRemaining = movesPerTurn;
+        animator = GetComponentInChildren<Animator>();
+    }
 
     void Start()
     {
         MovesRemaining = movesPerTurn;
         SnapToHex();
+        SyncNameLabel();
+        // Default to hidden — GameController turns the label on for the
+        // currently focused unit only.
+        if (nameLabel != null)
+            nameLabel.gameObject.SetActive(FindAnyObjectByType<GameController>()?.SelectedUnit == this);
+    }
+
+    /// <summary>
+    /// Toggles the focus-only overlays for this unit. Right now that's just
+    /// the in-world name label, which should only appear under the focused
+    /// unit so the map stays uncluttered when many units are visible.
+    /// </summary>
+    public void SetSelected(bool selected)
+    {
+        if (nameLabel != null)
+            nameLabel.gameObject.SetActive(selected);
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        SyncNameLabel();
+    }
+#endif
+
+    void SyncNameLabel()
+    {
+        if (nameLabel != null && nameLabel.text != unitName)
+            nameLabel.text = unitName;
     }
 
     void Update()
     {
-        if (waypoints.Count == 0)
+        bool moving = waypoints.Count > 0;
+        if (animator != null)
+            animator.SetBool(IsMovingParam, moving);
+
+        if (!moving)
             return;
 
         Vector3 target = waypoints.Peek();
-        transform.position = Vector3.MoveTowards(
-            transform.position, target, moveSpeed * Time.deltaTime);
 
-        if ((transform.position - target).sqrMagnitude < 0.0001f)
+        // Face the next waypoint on the XZ plane before stepping toward it.
+        Vector3 facing = target - canonicalPos;
+        facing.y = 0f;
+        if (facing.sqrMagnitude > 0.0001f)
         {
-            transform.position = target;
-            waypoints.Dequeue();
+            Quaternion want = Quaternion.LookRotation(facing);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation, want, turnSpeed * Time.deltaTime);
         }
+
+        canonicalPos = Vector3.MoveTowards(
+            canonicalPos, target, moveSpeed * Time.deltaTime);
+
+        if ((canonicalPos - target).sqrMagnitude < 0.0001f)
+        {
+            canonicalPos = target;
+            waypoints.Dequeue();
+
+            // End of the queued chain — re-wrap canonical X into [0, W) so
+            // the logical truth doesn't drift further each circumnavigation.
+            // The display reshuffles to the same screen pixel automatically
+            // because the wrap-to-camera offset jumps by exactly W at the
+            // same moment.
+            if (waypoints.Count == 0 && grid != null && grid.wrap && grid.WorldWidth > 0f)
+            {
+                float W = grid.WorldWidth;
+                canonicalPos.x -= Mathf.Floor(canonicalPos.x / W) * W;
+                lastQueuedTarget = canonicalPos;
+            }
+        }
+    }
+
+    void LateUpdate()
+    {
+        SyncDisplay();
     }
 
     /// <summary>Positions the unit on top of its hex tile.</summary>
@@ -74,7 +192,9 @@ public class Unit : MonoBehaviour
             Debug.LogError("Unit: grid is not assigned.", this);
             return;
         }
-        transform.position = grid.HexCenter(col, row) + Vector3.up * heightOffset;
+        canonicalPos = grid.HexCenter(col, row) + Vector3.up * heightOffset;
+        lastQueuedTarget = canonicalPos;
+        SyncDisplay();
     }
 
     /// <summary>
@@ -92,6 +212,9 @@ public class Unit : MonoBehaviour
     /// Walks up to <see cref="MovesRemaining"/> tiles along the pending path,
     /// consuming move points and queueing the slide animation. The logical
     /// position jumps to the destination immediately. Returns the tiles moved.
+    /// On a wrapping grid the queued slide target is offset by ±WorldWidth
+    /// as needed so the unit slides into the adjacent tile rather than back
+    /// across the whole world to a far canonical copy.
     /// </summary>
     public int MoveAlongPath()
     {
@@ -102,7 +225,16 @@ public class Unit : MonoBehaviour
             path.RemoveAt(0);
             col = tile.x;
             row = tile.y;
-            waypoints.Enqueue(grid.HexCenter(col, row) + Vector3.up * heightOffset);
+            Vector3 target = grid.HexCenter(col, row) + Vector3.up * heightOffset;
+            if (grid.wrap)
+            {
+                float W = grid.WorldWidth;
+                float dx = target.x - lastQueuedTarget.x;
+                while (dx > W * 0.5f) { target.x -= W; dx -= W; }
+                while (dx < -W * 0.5f) { target.x += W; dx += W; }
+            }
+            waypoints.Enqueue(target);
+            lastQueuedTarget = target;
         }
         MovesRemaining -= steps;
         return steps;
@@ -112,5 +244,27 @@ public class Unit : MonoBehaviour
     public void RefillMoves()
     {
         MovesRemaining = movesPerTurn;
+        skipped = false;
+    }
+
+    /// <summary>
+    /// Forfeits any remaining moves for this turn. The unit is treated as
+    /// having spent its action and the turn cycle should move past it.
+    /// </summary>
+    public void Skip()
+    {
+        skipped = true;
+    }
+
+    void SyncDisplay()
+    {
+        Vector3 display = canonicalPos;
+        if (grid != null && grid.wrap)
+        {
+            Camera cam = Camera.main;
+            if (cam != null)
+                display = grid.WrapToCamera(display, cam.transform.position.x);
+        }
+        transform.position = display;
     }
 }
