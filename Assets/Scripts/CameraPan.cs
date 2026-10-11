@@ -47,8 +47,9 @@ public class CameraPan : MonoBehaviour
     public float edgePanMargin = 20f;
 
     [Tooltip("World units the camera travels along its forward axis per " +
-             "unit of scroll input (perspective mode). Positive scroll zooms in.")]
-    public float zoomSpeed = 0.05f;
+             "unit of scroll input (perspective mode). Positive scroll zooms in. " +
+             "The Input System reports ±1 per wheel notch.")]
+    public float zoomSpeed = 3f;
 
     [Tooltip("Minimum camera height (Y) when zoomed all the way in (perspective mode).")]
     public float minZoomHeight = 6f;

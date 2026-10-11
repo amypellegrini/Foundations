@@ -76,7 +76,7 @@ public static class Foundations3DBuilder
         cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=new Color(.06f,.11f,.14f);cam.fieldOfView=43;cam.nearClipPlane=.1f;cam.farClipPlane=220;
         cameraObject.AddComponent<AudioListener>();cameraObject.AddComponent<UniversalAdditionalCameraData>();
         cameraObject.transform.rotation=Quaternion.Euler(49,0,0);cameraObject.transform.position=new Vector3(8,15,-7);
-        var pan=cameraObject.AddComponent<CameraPan>();pan.grid=grid;pan.cam=cam;pan.panSpeed=7;pan.zoomSpeed=.018f;pan.minZoomHeight=5;pan.maxZoomHeight=45;
+        var pan=cameraObject.AddComponent<CameraPan>();pan.grid=grid;pan.cam=cam;pan.panSpeed=7;pan.zoomSpeed=3f;pan.minZoomHeight=5;pan.maxZoomHeight=45;
         cameraObject.AddComponent<WorldOrbit3D>();
         var sun=new GameObject("Late afternoon sun").AddComponent<Light>();sun.type=LightType.Directional;sun.intensity=2;sun.color=new Color(1,.88f,.69f);sun.shadows=LightShadows.Soft;sun.transform.rotation=Quaternion.Euler(48,-38,0);
         RenderSettings.ambientMode=AmbientMode.Trilight;RenderSettings.ambientSkyColor=new Color(.56f,.66f,.69f);RenderSettings.ambientEquatorColor=new Color(.36f,.43f,.38f);RenderSettings.ambientGroundColor=new Color(.20f,.24f,.22f);
