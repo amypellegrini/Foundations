@@ -25,6 +25,10 @@ using UnityEngine.InputSystem;
 ///
 /// If a <see cref="HexGrid"/> is assigned, the pan position is clamped so
 /// the camera stays roughly over the map.
+///
+/// Automatic moves (following a sliding unit, focus changes) never snap:
+/// they ease toward a glide target, and only kick in once the unit is
+/// within <see cref="followEdgeTiles"/> of a window edge.
 /// </summary>
 public class CameraPan : MonoBehaviour
 {
@@ -77,6 +81,10 @@ public class CameraPan : MonoBehaviour
              "any window edge before the camera pans to stay with it.")]
     public float followEdgeTiles = 2f;
 
+    [Tooltip("Approximate seconds the camera takes to catch up with a glide " +
+             "target (focus changes and unit follow). Larger is gentler.")]
+    public float glideSmoothTime = 0.35f;
+
     // Pixel distance the cursor must travel while the left button is held
     // before we treat the gesture as a camera drag rather than a click. Kept
     // in sync with the matching threshold in GameController so the two
@@ -92,6 +100,13 @@ public class CameraPan : MonoBehaviour
     Vector2 dragPressScreen;
     bool dragButtonHeld;
     bool dragging;
+
+    // Ground point the camera is easing its look-at toward (focus changes
+    // and unit follow). Stored as a look-at point rather than a camera
+    // position so orbit and zoom mid-glide don't invalidate it.
+    Vector3 glideTarget;
+    Vector3 glideVelocity;
+    bool gliding;
 
     void Update()
     {
@@ -113,13 +128,20 @@ public class CameraPan : MonoBehaviour
         // Edge-of-screen pan and keyboard pan compose on top of any drag
         // delta this frame. Edge-pan is suppressed while dragging so a
         // drag that brushes the window border doesn't get a free boost.
+        Vector3 beforeManualPan = position;
         if (!dragging)
             position = ApplyEdgePan(position);
         position = ApplyKeyboardPan(position);
 
+        // Any manual pan hands control back to the player: drop a pending
+        // glide so it doesn't drag the view back once the input stops.
+        if (dragging || position != beforeManualPan)
+            CancelGlide();
+
         // Auto-follow runs last so it can pull the camera back if user input
         // would otherwise let the followed unit slip past the safe-zone edge.
-        position = ApplyFollow(position);
+        UpdateFollowTarget(position);
+        position = ApplyGlide(position);
 
         // Cylindrical grids let the camera roam unbounded in X. Re-wrap
         // it into [0, WorldWidth) at the end of each frame so coordinates
@@ -134,6 +156,7 @@ public class CameraPan : MonoBehaviour
             {
                 position.x = wrappedX;
                 if (dragging) dragAnchorWorld.x += shift;
+                if (gliding) glideTarget.x += shift;
             }
         }
 
@@ -414,24 +437,92 @@ public class CameraPan : MonoBehaviour
         return new Vector2(x, y);
     }
 
-    // While the followed unit is sliding, keep its on-screen position at
-    // least followEdgeTiles tiles inside every window edge. The safe-zone
-    // check runs in screen pixels (using the unit's local tile pitch in
-    // pixels) so it stays correct under both ortho and perspective cameras
-    // at any zoom. Any deficit is converted back to a world-XZ camera shift.
-    Vector3 ApplyFollow(Vector3 position)
+    // While the followed unit is sliding, the camera stays put until the
+    // unit comes within followEdgeTiles of a window edge; from then on the
+    // glide target tracks the point that would hold the unit on that
+    // safe-zone line, and ApplyGlide eases the camera after it.
+    void UpdateFollowTarget(Vector3 position)
     {
         if (followUnit == null || !followUnit.IsMoving)
+            return;
+        if (SafeZoneShift(followUnit.transform.position, out Vector3 shift))
+            SetGlideTarget(position + GroundLookAtOffset(position) + shift);
+    }
+
+    // Eases the camera's ground look-at point toward glideTarget with a
+    // critically damped spring, so it starts and stops gently instead of
+    // snapping.
+    Vector3 ApplyGlide(Vector3 position)
+    {
+        if (!gliding)
             return position;
 
+        Vector3 look = position + GroundLookAtOffset(position);
+        look.y = 0f;
+        Vector3 target = new Vector3(glideTarget.x, 0f, glideTarget.z);
+        // Cap the step so a hitch frame (e.g. turn rollover) can't turn the
+        // glide into a lurch.
+        float dt = Mathf.Min(Time.deltaTime, 1f / 30f);
+        Vector3 nextLook = Vector3.SmoothDamp(look, target, ref glideVelocity,
+            Mathf.Max(0.01f, glideSmoothTime), Mathf.Infinity, dt);
+
+        Vector3 next = position + (nextLook - look);
+        if (grid != null)
+            next = ClampToGrid(position, next);
+
+        bool followActive = followUnit != null && followUnit.IsMoving;
+        bool arrived = (target - nextLook).sqrMagnitude < 0.0001f;
+        bool blocked = (next - position).sqrMagnitude < 1e-8f; // pinned by the map clamp
+        if (!followActive && (arrived || blocked))
+            CancelGlide();
+
+        return next;
+    }
+
+    void SetGlideTarget(Vector3 lookAt)
+    {
+        if (!gliding)
+            glideVelocity = Vector3.zero;
+        glideTarget = lookAt;
+        gliding = true;
+    }
+
+    void CancelGlide()
+    {
+        gliding = false;
+        glideVelocity = Vector3.zero;
+    }
+
+    /// <summary>
+    /// Glides the camera to center <paramref name="worldPos"/>, but only if
+    /// it currently sits within <see cref="followEdgeTiles"/> of a window
+    /// edge (or off screen). A unit that's already comfortably in view
+    /// leaves the camera where it is.
+    /// </summary>
+    public void BringIntoView(Vector3 worldPos)
+    {
+        if (SafeZoneShift(worldPos, out _))
+            CenterOn(worldPos);
+    }
+
+    // Whether worldPos lies outside the on-screen safe zone (at least
+    // followEdgeTiles tiles inside every window edge), and if so the
+    // world-XZ shift of the camera's look-at that would put it back on the
+    // zone's edge. The check runs in screen pixels (using the local tile
+    // pitch in pixels) so it stays correct under both ortho and perspective
+    // cameras at any zoom. Points behind the camera count as outside, with
+    // no usable shift.
+    bool SafeZoneShift(Vector3 worldPos, out Vector3 shift)
+    {
+        shift = Vector3.zero;
         Camera c = cam != null ? cam : Camera.main;
         if (c == null || grid == null)
-            return position;
+            return false;
 
-        Vector3 unitWorld = followUnit.transform.position;
+        Vector3 unitWorld = worldPos;
         Vector3 screen = c.WorldToScreenPoint(unitWorld);
         if (screen.z <= 0f)
-            return position; // unit is behind the camera; nothing sensible to do
+            return true;
 
         // Project the unit's east and north neighbors to measure the tile
         // pitch in pixels at the unit's depth — this is how big "2 tiles"
@@ -441,7 +532,7 @@ public class CameraPan : MonoBehaviour
         float tilePxX = Mathf.Abs(c.WorldToScreenPoint(eastWorld).x - screen.x);
         float tilePxY = Mathf.Abs(c.WorldToScreenPoint(northWorld).y - screen.y);
         if (tilePxX < 0.001f || tilePxY < 0.001f)
-            return position;
+            return false;
 
         float marginX = followEdgeTiles * tilePxX;
         float marginY = followEdgeTiles * tilePxY;
@@ -449,7 +540,7 @@ public class CameraPan : MonoBehaviour
         float wantY = Mathf.Clamp(screen.y, marginY, Screen.height - marginY);
 
         if (Mathf.Approximately(wantX, screen.x) && Mathf.Approximately(wantY, screen.y))
-            return position;
+            return false;
 
         // Convert the pixel deficit at the unit's depth into the world-XZ
         // shift the camera needs to apply. ScreenToWorldPoint with the
@@ -458,22 +549,27 @@ public class CameraPan : MonoBehaviour
         // must move to bring the unit to the safe-zone position.
         Vector3 currentAtUnit = c.ScreenToWorldPoint(new Vector3(screen.x, screen.y, screen.z));
         Vector3 desiredAtUnit = c.ScreenToWorldPoint(new Vector3(wantX, wantY, screen.z));
-        Vector3 delta = currentAtUnit - desiredAtUnit;
-        delta.y = 0f;
-
-        Vector3 next = position + delta;
-        return ClampToGrid(position, next);
+        shift = currentAtUnit - desiredAtUnit;
+        shift.y = 0f;
+        return true;
     }
 
     /// <summary>
-    /// Pans the camera so its ground look-at point lands on <paramref name="worldPos"/>.
-    /// Used on turn advance to bring the active unit back to screen center.
+    /// Glides the camera so its ground look-at point lands on <paramref name="worldPos"/>.
     /// </summary>
     public void CenterOn(Vector3 worldPos)
     {
         Vector3 p = transform.position;
-        Vector3 offset = GroundLookAtOffset(p);
-        transform.position = new Vector3(worldPos.x - offset.x, p.y, worldPos.z - offset.z);
+        Vector3 look = p + GroundLookAtOffset(p);
+
+        // On a cylindrical grid, head for whichever copy of the target is
+        // nearest so the glide never takes the long way round the world.
+        if (grid != null && grid.wrap && grid.WorldWidth > 0f)
+        {
+            float W = grid.WorldWidth;
+            worldPos.x = look.x + Mathf.Repeat(worldPos.x - look.x + W * 0.5f, W) - W * 0.5f;
+        }
+        SetGlideTarget(worldPos);
 
         // Drop any in-progress drag so the re-anchor logic doesn't yank the
         // camera back to where the drag started.

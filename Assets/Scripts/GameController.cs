@@ -600,7 +600,7 @@ public class GameController : MonoBehaviour
 
         Select(next);
         if (cameraPan != null)
-            cameraPan.CenterOn(next.transform.position);
+            cameraPan.BringIntoView(next.transform.position);
     }
 
     /// <summary>
@@ -757,11 +757,11 @@ public class GameController : MonoBehaviour
             if (unit.Path.Count == 0 || unit.MovesRemaining == 0) continue;
 
             // Focus moves to the unit that's about to walk so the player
-            // can see what's happening — camera centers and the HUD
-            // marker tracks it.
+            // can see what's happening — the camera glides over if the unit
+            // is near the screen edge, and the HUD marker tracks it.
             Select(unit);
             if (cameraPan != null)
-                cameraPan.CenterOn(unit.transform.position);
+                cameraPan.BringIntoView(unit.transform.position);
             unit.MoveAlongPath();
             RefreshHighlights();
             return;
@@ -769,9 +769,9 @@ public class GameController : MonoBehaviour
     }
 
     /// <summary>
-    /// Restart the per-turn cycle on the first un-acted unit, re-centering
-    /// the camera so the player doesn't scroll-hunt after spending the
-    /// previous turn elsewhere on the map.
+    /// Restart the per-turn cycle on the first un-acted unit, gliding the
+    /// camera over if it's near the edge or off screen, so the player doesn't
+    /// scroll-hunt after spending the previous turn elsewhere on the map.
     /// </summary>
     void ApplyTurnRestart()
     {
@@ -779,7 +779,7 @@ public class GameController : MonoBehaviour
         if (first == null) return;
         Select(first);
         if (cameraPan != null)
-            cameraPan.CenterOn(first.transform.position);
+            cameraPan.BringIntoView(first.transform.position);
     }
 
     // --- Overlays --------------------------------------------------------
