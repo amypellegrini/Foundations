@@ -69,7 +69,8 @@ public static class Foundations3DBuilder
         fog.heightOffset=.48f;fog.unknownAlpha=1;fog.decayTurns=10;EditorUtility.SetDirty(fog.fogMaterial);
         var decorations=gridObject.AddComponent<WorldDecor3D>();decorations.treePrefab=treePrefab;decorations.rockPrefab=rockPrefab;
         gridObject.AddComponent<HexGridCulling>().grid=grid;
-        MakeUnit(grid,"Founder",founderPrefab,true,2); MakeUnit(grid,"Hunter",hunterPrefab,false,3);
+        var characters=CharacterUnitsBuilder.BuildPrefabs();
+        MakeUnit(grid,"Founder",characters.founder,true,2); MakeUnit(grid,"Hunter",characters.hunter,false,3);
         var highlight=new GameObject("Selection").AddComponent<HexHighlight>();highlight.borderMaterial=Mat("Selection ivory","FFE9AD",true);highlight.radius=.94f;highlight.heightOffset=.05f;highlight.lineWidth=.045f;
         var path=new GameObject("Projected route").AddComponent<PathHighlight>();path.lineMaterial=Mat("Route gold","FFD16D",true);path.heightOffset=.12f;path.lineWidth=.065f;
         var cameraObject=new GameObject("Main Camera");cameraObject.tag="MainCamera";var cam=cameraObject.AddComponent<Camera>();
@@ -90,8 +91,7 @@ public static class Foundations3DBuilder
     {
         var go=new GameObject(name);var collider=go.AddComponent<CapsuleCollider>();collider.center=Vector3.up*.8f;collider.height=1.7f;collider.radius=.36f;
         var unit=go.AddComponent<Unit>();unit.grid=grid;unit.unitName=name;unit.canFoundCity=canFound;unit.sightRadius=sight;unit.heightOffset=.015f;
-        var model=(GameObject)PrefabUtility.InstantiatePrefab(prefab,go.transform);model.transform.localRotation=Quaternion.Euler(0,180,0);
-        model.AddComponent<HunterVisual3D>().unit=unit;
+        CharacterUnitsBuilder.AttachCharacter(unit,prefab);
     }
     static Material Mat(string name,string color,bool unlit=false)
     {
