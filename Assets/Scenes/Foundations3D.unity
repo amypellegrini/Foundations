@@ -261,6 +261,7 @@ MonoBehaviour:
   maxOrthoSize: 7
   followUnit: {fileID: 0}
   followEdgeTiles: 2
+  glideSmoothTime: 0.35
 --- !u!20 &380685704
 Camera:
   m_ObjectHideFlags: 0
