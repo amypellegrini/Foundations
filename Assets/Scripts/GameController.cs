@@ -90,6 +90,8 @@ public class GameController : MonoBehaviour
     // issue a move order — a click outside the panel just dismisses it.
     City selectedCity;
     GUIStyle cityTitleStyle;
+    GUIStyle modalButtonStyle;
+    GUIStyle modalTextFieldStyle;
 
     // Position of the cursor when the left mouse button went down. On
     // release, the click only commits if the cursor hasn't moved past the
@@ -873,17 +875,25 @@ public class GameController : MonoBehaviour
     }
 
     /// <summary>The screen-space rect of the city status popup. Shared by the
-    /// renderer and the click-outside hit-test so the two stay in lockstep.</summary>
+    /// renderer and the click-outside hit-test so the two stay in lockstep.
+    /// Laid out in the HUD's virtual units and scaled by ExpeditionHUD.Scale
+    /// so it stays readable at any resolution.</summary>
     static Rect CityPanelRect()
     {
-        const float w = 360f, h = 210f;
+        float s = ExpeditionHUD.Scale;
+        float w = CityPanelSize.x * s, h = CityPanelSize.y * s;
         return new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
     }
 
+    static readonly Vector2 CityPanelSize = new Vector2(460f, 280f);
+
     void DrawCityPanel()
     {
-        var rect = CityPanelRect();
-        GUI.Box(rect, GUIContent.none);
+        float s = ExpeditionHUD.Scale;
+        var screenRect = CityPanelRect();
+        var rect = new Rect(screenRect.x / s, screenRect.y / s, CityPanelSize.x, CityPanelSize.y);
+        GUI.matrix = Matrix4x4.Scale(new Vector3(s, s, 1f));
+        DrawModalPanel(rect);
 
         hudStyle ??= new GUIStyle(GUI.skin.label)
         {
@@ -892,24 +902,30 @@ public class GameController : MonoBehaviour
         };
         cityTitleStyle ??= new GUIStyle(GUI.skin.label)
         {
-            fontSize = 28,
+            fontSize = 32,
             fontStyle = FontStyle.Bold,
             normal = { textColor = Color.white },
         };
+        modalButtonStyle ??= new GUIStyle(GUI.skin.button)
+        {
+            fontSize = 20,
+            fontStyle = FontStyle.Bold,
+        };
 
-        GUILayout.BeginArea(new Rect(rect.x + 20, rect.y + 16, rect.width - 40, rect.height - 32));
+        GUILayout.BeginArea(new Rect(rect.x + 24, rect.y + 18, rect.width - 48, rect.height - 36));
         GUILayout.Label(selectedCity.cityName, cityTitleStyle);
-        GUILayout.Space(10);
+        GUILayout.Space(12);
         GUILayout.Label($"Population: {selectedCity.population}", hudStyle);
-        GUILayout.Space(6);
+        GUILayout.Space(8);
         string growth = selectedCity.IsAccruing
             ? $"Growth: {selectedCity.growthProgress}/{City.TurnsPerGrowth} turns"
             : "Growth: idle (no Hunter in radius)";
         GUILayout.Label(growth, hudStyle);
         GUILayout.FlexibleSpace();
-        if (GUILayout.Button("Close", GUILayout.Height(30)))
+        if (GUILayout.Button("Close", modalButtonStyle, GUILayout.Height(40)))
             selectedCity = null;
         GUILayout.EndArea();
+        GUI.matrix = Matrix4x4.identity;
     }
 
     void DrawBottomRightHud()
@@ -959,9 +975,31 @@ public class GameController : MonoBehaviour
             normal = { textColor = Color.white },
         };
 
-        const float w = 380f, h = 210f;
-        var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
-        GUI.Box(rect, GUIContent.none);
+        cityTitleStyle ??= new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 32,
+            fontStyle = FontStyle.Bold,
+            normal = { textColor = Color.white },
+        };
+        modalButtonStyle ??= new GUIStyle(GUI.skin.button)
+        {
+            fontSize = 20,
+            fontStyle = FontStyle.Bold,
+        };
+        modalTextFieldStyle ??= new GUIStyle(GUI.skin.textField)
+        {
+            fontSize = 22,
+            alignment = TextAnchor.MiddleLeft,
+            padding = new RectOffset(8, 8, 4, 4),
+        };
+
+        // Same virtual-unit scaling as the city panel so it stays readable at
+        // any resolution.
+        float s = ExpeditionHUD.Scale;
+        const float w = 460f, h = 280f;
+        var rect = new Rect((Screen.width / s - w) * 0.5f, (Screen.height / s - h) * 0.5f, w, h);
+        GUI.matrix = Matrix4x4.Scale(new Vector3(s, s, 1f));
+        DrawModalPanel(rect);
 
         // Enter confirms, Esc cancels — handled before the controls consume
         // the keystroke as text input.
@@ -972,38 +1010,52 @@ public class GameController : MonoBehaviour
             {
                 ConfirmFoundCity();
                 e.Use();
+                GUI.matrix = Matrix4x4.identity;
                 return;
             }
             if (e.keyCode == KeyCode.Escape)
             {
                 CancelFoundCityDialog();
                 e.Use();
+                GUI.matrix = Matrix4x4.identity;
                 return;
             }
         }
 
-        GUILayout.BeginArea(new Rect(rect.x + 20, rect.y + 16, rect.width - 40, rect.height - 32));
-        GUILayout.Label("Found City", hudStyle);
+        GUILayout.BeginArea(new Rect(rect.x + 24, rect.y + 18, rect.width - 48, rect.height - 36));
+        GUILayout.Label("Found City", cityTitleStyle);
         GUILayout.Space(10);
         GUILayout.Label("City name", hudStyle);
 
         GUI.SetNextControlName("CityNameField");
-        foundCityName = GUILayout.TextField(foundCityName, 32, GUILayout.Height(28));
+        foundCityName = GUILayout.TextField(foundCityName, 32, modalTextFieldStyle, GUILayout.Height(40));
         if (focusNameField)
         {
             GUI.FocusControl("CityNameField");
             focusNameField = false;
         }
 
-        GUILayout.Space(14);
+        GUILayout.FlexibleSpace();
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("Confirm", GUILayout.Height(32)))
+        if (GUILayout.Button("Confirm", modalButtonStyle, GUILayout.Height(40)))
             ConfirmFoundCity();
-        GUILayout.Space(10);
-        if (GUILayout.Button("Cancel", GUILayout.Height(32)))
+        GUILayout.Space(12);
+        if (GUILayout.Button("Cancel", modalButtonStyle, GUILayout.Height(40)))
             CancelFoundCityDialog();
         GUILayout.EndHorizontal();
         GUILayout.EndArea();
+        GUI.matrix = Matrix4x4.identity;
+    }
+
+    /// <summary>Opaque popup background in the HUD palette, so the map doesn't
+    /// bleed through the text.</summary>
+    static void DrawModalPanel(Rect rect)
+    {
+        GUI.color = new Color(.66f, .53f, .30f);
+        GUI.DrawTexture(new Rect(rect.x - 2, rect.y - 2, rect.width + 4, rect.height + 4), Texture2D.whiteTexture);
+        GUI.color = new Color(.045f, .095f, .105f, .97f);
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        GUI.color = Color.white;
     }
 
     string GetTurnStateIndicator()
